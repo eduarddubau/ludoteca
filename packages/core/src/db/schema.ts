@@ -1,5 +1,5 @@
 // Bump when SCHEMA changes so a shell opening an older file can tell.
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 // One row per game per store. The same title arriving from two stores stays two rows;
 // merging is a presentation concern, and a wrong merge is worse than a duplicate.
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS game (
   icon_url         TEXT,
   cover_url        TEXT,
   notes            TEXT,
+  enriched_at      TEXT,
 
   PRIMARY KEY (store, store_game_id)
 );
@@ -39,3 +40,8 @@ CREATE TABLE IF NOT EXISTS sync_state (
   last_error     TEXT
 );
 `
+
+/** Applied in order to any database older than SCHEMA_VERSION. Fresh ones get SCHEMA. */
+export const MIGRATIONS: { version: number; sql: string }[] = [
+  { version: 3, sql: `ALTER TABLE game ADD COLUMN enriched_at TEXT;` }
+]

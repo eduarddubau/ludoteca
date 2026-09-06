@@ -30,6 +30,8 @@ export interface OwnedGame {
   iconUrl?: string
   coverUrl?: string
   notes?: string
+  /** ISO timestamp of the last enrichment attempt, set whether or not it matched. */
+  enrichedAt?: string
 }
 
 export interface StoreConnector {

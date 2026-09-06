@@ -207,3 +207,20 @@ input[type='file'] { color: var(--muted); }
 .links a { color: var(--accent); text-transform: capitalize; }
 /* A search fallback, not the game's own page. */
 .links a.approx { color: var(--muted); text-decoration: underline dotted; }
+
+/* Per-game enrichment, shown only on games never attempted. */
+.tile-enrich {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 7px;
+  font-size: 13px;
+  line-height: 1.4;
+  background: rgba(16, 19, 26, 0.85);
+}
+.row-enrich {
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}

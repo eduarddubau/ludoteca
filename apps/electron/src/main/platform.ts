@@ -2,7 +2,10 @@ import { app, BrowserWindow, net, safeStorage, session } from 'electron'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
-import { SCHEMA, SCHEMA_VERSION, type Cookie, type HttpRequest, type HttpResponse } from '@ludoteca/core'
+import {
+  MIGRATIONS, SCHEMA, SCHEMA_VERSION,
+  type Cookie, type HttpRequest, type HttpResponse
+} from '@ludoteca/core'
 
 export interface SerializedPattern {
   source: string
@@ -28,7 +31,14 @@ function getDb(): Database.Database {
     db = new Database(join(sharedDataDir(), 'ludoteca.db'))
     // WAL lets both shells read at once with a single writer.
     db.pragma('journal_mode = WAL')
+
+    // CREATE TABLE IF NOT EXISTS never alters an existing table, so a database written
+    // by an older build needs the migrations applied on top.
+    const existing = Number((db.pragma('user_version', { simple: true }) as number) ?? 0)
     db.exec(SCHEMA)
+    for (const migration of MIGRATIONS.filter((m) => m.version > existing && existing > 0)) {
+      db.exec(migration.sql)
+    }
     db.pragma(`user_version = ${SCHEMA_VERSION}`)
   }
   return db

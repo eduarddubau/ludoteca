@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { metacriticLink, storeLink, type OwnedGame } from '@ludoteca/core'
+import { metacriticLink, needsEnrichment, storeLink, type OwnedGame } from '@ludoteca/core'
 import ScoreChip from './ScoreChip.vue'
 
 const props = defineProps<{ game: OwnedGame }>()
+const emit = defineEmits<{ enrich: [game: OwnedGame] }>()
 
 const store = computed(() => storeLink(props.game))
 const metacritic = computed(() => metacriticLink(props.game))
@@ -31,6 +32,15 @@ const hours = computed(() =>
         :href="metacritic.url"
         :exact="metacritic.exact"
       />
+
+      <button
+        v-if="needsEnrichment(game)"
+        class="tile-enrich"
+        title="Fetch score, art and genres for this game"
+        @click="emit('enrich', game)"
+      >
+        ↻
+      </button>
     </div>
 
     <div class="meta">

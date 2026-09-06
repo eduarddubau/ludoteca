@@ -13,6 +13,15 @@ export interface EnrichOptions {
   delayMs?: number
   onProgress?: (progress: EnrichProgress) => void
   signal?: { aborted: boolean }
+  /** Re-attempt games that have already been tried. */
+  force?: boolean
+  /**
+   * Called every `checkpointEvery` games with the full library so far. A full run takes
+   * minutes; without this, a crash loses all of it, since unpersisted work has no
+   * `enrichedAt` to resume from.
+   */
+  onCheckpoint?: (games: OwnedGame[]) => Promise<void> | void
+  checkpointEvery?: number
 }
 
 interface SearchHit {
@@ -35,11 +44,34 @@ async function json<T>(platform: Platform, url: string): Promise<T | null> {
   }
 }
 
-/** Steam's own search ranking does the fuzzy matching, which beats a local title index. */
+// Editions Steam ships under a longer name than the game is commonly called.
+const EDITION_SUFFIX =
+  /(ultimate|definitive|complete|deluxe|enhanced|goty|game of the year|remastered|anniversary|standard)\s*(edition)?$/
+
+/**
+ * Searches Steam and returns a hit only when the name genuinely corresponds.
+ *
+ * Deliberately scans the whole result list rather than trusting the top hit: sequels
+ * outrank originals, so "Hades" returns Hades II first and "Subnautica" returns
+ * Subnautica 2. Checking only index 0 rejected three of four popular titles.
+ */
 async function findAppId(platform: Platform, title: string): Promise<SearchHit | null> {
   const url = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(title)}&cc=us&l=en`
   const result = await json<{ items?: SearchHit[] }>(platform, url)
-  return result?.items?.[0] ?? null
+  const items = result?.items ?? []
+  const wanted = normalize(title)
+
+  const exact = items.find((item) => normalize(item.name) === wanted)
+  if (exact) return exact
+
+  // Second tier: the same game under an edition name. Anything else is left unmatched
+  // for a human to resolve rather than guessed at.
+  return (
+    items.find((item) => {
+      const name = item.name.toLowerCase()
+      return name.startsWith(title.toLowerCase()) && EDITION_SUFFIX.test(name.slice(title.length).trim())
+    }) ?? null
+  )
 }
 
 interface AppDetails {
@@ -64,61 +96,68 @@ function releaseYear(raw: string | undefined): number | undefined {
   return year ? Number(year) : undefined
 }
 
+/** True when this game has never been through enrichment. */
+export function needsEnrichment(game: OwnedGame): boolean {
+  return game.enrichedAt === undefined
+}
+
 /**
- * Fills Metacritic score, cover art, genres and release year from Steam's public store
- * endpoints — no API key. Runs for every game, not only Steam ones: Steam's database
- * carries most Epic and GOG titles too, and a Metacritic score is the same score
- * wherever the game was bought. Only `storeUrl` stays store-specific.
+ * Enriches one game from Steam's public store endpoints — no API key. Call this
+ * directly when a single game is added; `enrichLibrary` is the batch built on it.
+ *
+ * Runs for every store, not only Steam: Steam's database carries most Epic and GOG
+ * titles, and a Metacritic score is the same score wherever the game was bought. Only
+ * `storeUrl` stays store-specific.
  */
-export async function enrichFromSteam(
+export async function enrichGame(platform: Platform, game: OwnedGame): Promise<OwnedGame> {
+  const attemptedAt = new Date().toISOString()
+  const hit = await findAppId(platform, game.title)
+  if (!hit) return { ...game, enrichedAt: attemptedAt }
+
+  const details = await fetchDetails(platform, hit.id)
+  return {
+    ...game,
+    criticScore: details?.metacritic?.score ?? game.criticScore,
+    metacriticUrl: details?.metacritic?.url ?? game.metacriticUrl,
+    coverUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${hit.id}/library_600x900.jpg`,
+    genres: details?.genres?.map((g) => g.description) ?? game.genres,
+    releaseYear: releaseYear(details?.release_date?.date) ?? game.releaseYear,
+    storeUrl:
+      game.store === 'steam'
+        ? `https://store.steampowered.com/app/${hit.id}`
+        : game.storeUrl,
+    enrichedAt: attemptedAt
+  }
+}
+
+/** Enriches every game that has not been attempted yet, paced and interruptible. */
+export async function enrichLibrary(
   platform: Platform,
   games: OwnedGame[],
   options: EnrichOptions = {}
 ): Promise<OwnedGame[]> {
-  const { delayMs = 350, onProgress, signal } = options
-  const enriched: OwnedGame[] = []
+  const { delayMs = 350, onProgress, signal, force = false, onCheckpoint, checkpointEvery = 25 } = options
+  const pending = games.filter((game) => force || needsEnrichment(game))
+  const results = new Map<string, OwnedGame>()
 
-  for (const [index, game] of games.entries()) {
-    if (signal?.aborted) {
-      enriched.push(...games.slice(index))
-      break
-    }
+  const merged = (): OwnedGame[] =>
+    games.map((game) => results.get(`${game.store}:${game.storeGameId}`) ?? game)
 
-    // Already enriched, or previously searched and not found.
-    if (game.criticScore !== undefined || game.coverUrl !== undefined) {
-      enriched.push(game)
-      continue
-    }
+  for (const [index, game] of pending.entries()) {
+    if (signal?.aborted) break
 
-    const hit = await findAppId(platform, game.title)
-    // Only trust a hit whose name actually matches; Steam always returns *something*.
-    const matched = hit !== null && normalize(hit.name) === normalize(game.title)
-
-    if (!hit || !matched) {
-      enriched.push(game)
-      onProgress?.({ done: index + 1, total: games.length, title: game.title, matched: false })
-      await sleep(delayMs)
-      continue
-    }
-
-    const details = await fetchDetails(platform, hit.id)
-    enriched.push({
-      ...game,
-      criticScore: details?.metacritic?.score ?? game.criticScore,
-      metacriticUrl: details?.metacritic?.url ?? game.metacriticUrl,
-      coverUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${hit.id}/library_600x900.jpg`,
-      genres: details?.genres?.map((g) => g.description) ?? game.genres,
-      releaseYear: releaseYear(details?.release_date?.date) ?? game.releaseYear,
-      // Steam is the source of the metadata, but not necessarily where it was bought.
-      storeUrl:
-        game.store === 'steam'
-          ? `https://store.steampowered.com/app/${hit.id}`
-          : game.storeUrl
+    const enriched = await enrichGame(platform, game)
+    results.set(`${game.store}:${game.storeGameId}`, enriched)
+    onProgress?.({
+      done: index + 1,
+      total: pending.length,
+      title: game.title,
+      matched: enriched.criticScore !== undefined || enriched.coverUrl !== undefined
     })
 
-    onProgress?.({ done: index + 1, total: games.length, title: game.title, matched: true })
+    if (onCheckpoint && (index + 1) % checkpointEvery === 0) await onCheckpoint(merged())
     await sleep(delayMs)
   }
 
-  return enriched
+  return merged()
 }

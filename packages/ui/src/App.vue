@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import {
-  enrichFromSteam, sampleLibrary,
+  enrichGame, enrichLibrary, needsEnrichment, sampleLibrary,
   type EnrichProgress, type OwnedGame, type PlayStatus, type StoreId
 } from '@ludoteca/core'
 import { usePlatform } from './platform'
@@ -25,6 +25,8 @@ const descending = ref(false)
 
 const progress = ref<EnrichProgress | null>(null)
 const abort = ref({ aborted: false })
+
+const unenriched = computed(() => games.value.filter(needsEnrichment).length)
 
 onMounted(async () => {
   const platform = usePlatform()
@@ -73,14 +75,27 @@ async function enrich(): Promise<void> {
   abort.value = { aborted: false }
   progress.value = { done: 0, total: games.value.length, title: '', matched: false }
   try {
-    const next = await enrichFromSteam(platform, games.value, {
+    const next = await enrichLibrary(platform, games.value, {
       signal: abort.value,
-      onProgress: (p) => (progress.value = p)
+      onProgress: (p) => (progress.value = p),
+      // A full run takes minutes; write periodically so a crash costs a batch, not all of it.
+      onCheckpoint: (partial) => replaceGames(platform, partial)
     })
     await persist(next)
   } finally {
     progress.value = null
   }
+}
+
+// Single-game path, for a title added after the last bulk run.
+async function enrichOne(game: OwnedGame): Promise<void> {
+  const platform = usePlatform()
+  const updated = await enrichGame(platform, game)
+  await persist(
+    games.value.map((g) =>
+      g.store === game.store && g.storeGameId === game.storeGameId ? updated : g
+    )
+  )
 }
 
 async function persist(next: OwnedGame[]): Promise<void> {
@@ -112,7 +127,9 @@ async function persist(next: OwnedGame[]): Promise<void> {
         {{ showImport ? 'Close import' : 'Import CSV' }}
       </button>
       <button v-if="!games.length" @click="persist(sampleLibrary())">Load sample data</button>
-      <button v-if="games.length && !progress" @click="enrich">Fetch scores &amp; art</button>
+      <button v-if="unenriched && !progress" @click="enrich">
+        Fetch metadata ({{ unenriched }})
+      </button>
       <button v-if="progress" @click="abort.aborted = true">Stop</button>
     </div>
 
@@ -160,13 +177,14 @@ async function persist(next: OwnedGame[]): Promise<void> {
     <p v-if="!games.length" class="muted panel">
       No games yet. Import a CSV, or load the sample data to see the layout.
     </p>
-    <LibraryGrid v-else-if="view === 'grid'" :games="visible" />
+    <LibraryGrid v-else-if="view === 'grid'" :games="visible" @enrich="enrichOne" />
     <LibraryTable
       v-else
       :games="visible"
       :sort-key="sortKey"
       :descending="descending"
       @sort="onSort"
+      @enrich="enrichOne"
     />
   </div>
 </template>

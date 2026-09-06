@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { metacriticLink, storeLink, type OwnedGame } from '@ludoteca/core'
+import { metacriticLink, needsEnrichment, storeLink, type OwnedGame } from '@ludoteca/core'
 import { SORT_COLUMNS, type SortKey } from '../lib/sort'
 import ScoreChip from './ScoreChip.vue'
 
 defineProps<{ games: OwnedGame[]; sortKey: SortKey; descending: boolean }>()
-const emit = defineEmits<{ sort: [key: SortKey] }>()
+const emit = defineEmits<{ sort: [key: SortKey]; enrich: [game: OwnedGame] }>()
 
 const hours = (game: OwnedGame): string =>
   game.playtimeMinutes === undefined ? '—' : Math.round(game.playtimeMinutes / 60).toString()
@@ -51,6 +51,14 @@ const hours = (game: OwnedGame): string =>
               :class="{ approx: !storeLink(game).exact }"
               :title="storeLink(game).exact ? 'Store page' : 'Search the store (no exact match yet)'"
             >{{ game.store }}</a>
+            <button
+              v-if="needsEnrichment(game)"
+              class="row-enrich"
+              title="Fetch score, art and genres for this game"
+              @click="emit('enrich', game)"
+            >
+              ↻
+            </button>
           </td>
         </tr>
       </tbody>
