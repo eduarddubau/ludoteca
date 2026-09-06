@@ -1,0 +1,20 @@
+{
+  "name": "@ludoteca/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@ludoteca/core": "*",
+    "vue": "^3.5.25"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.2",
+    "vite": "^7.2.6",
+    "vue-tsc": "^3.1.6"
+  }
+}

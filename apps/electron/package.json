@@ -1,0 +1,23 @@
+{
+  "name": "@ludoteca/electron",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/main/index.cjs",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup && wait-on tcp:5173 && cross-env LUDOTECA_DEV=1 electron .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ludoteca/core": "*",
+    "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.19.1",
+    "cross-env": "^10.1.0",
+    "electron": "^44.2.0",
+    "tsup": "^8.5.0",
+    "wait-on": "^9.0.1"
+  }
+}

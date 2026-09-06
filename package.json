@@ -1,0 +1,27 @@
+{
+  "name": "ludoteca",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Cross-store game library viewer for Steam, GOG and Epic.",
+  "author": "Eduard Dubau",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @ludoteca/core && npm run build -w @ludoteca/ui",
+    "dev:electron": "npm run dev -w @ludoteca/electron",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev": "concurrently -k -n ui,electron -c cyan,yellow \"npm run dev -w @ludoteca/ui\" \"npm run dev -w @ludoteca/electron\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "concurrently": "^9.2.1",
+    "eslint-plugin-vue": "^10.6.2",
+    "vue-eslint-parser": "^10.2.0"
+  }
+}

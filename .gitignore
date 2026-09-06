@@ -1,6 +1,9 @@
-node_modules/
-dist/
-out/
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
 
 # Notes and per-machine permissions live in llm-rulebase, reached through this
 # symlink. Bare, with no trailing slash — the usual `.claude/` pattern does not
