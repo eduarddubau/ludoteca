@@ -4,7 +4,7 @@ export type {
 } from './platform.js'
 export type { StoreId, Ownership, OwnedGame, PlayStatus, StoreConnector } from './connectors/types.js'
 export { GogConnector } from './connectors/gog.js'
-export { SCHEMA, SCHEMA_VERSION, MIGRATIONS } from './db/schema.js'
+export { SCHEMA, SCHEMA_VERSION, MIGRATIONS, TABLES } from './db/schema.js'
 export {
   parseCsv, suggestMapping, toOwnedGames, EMPTY_MAPPING,
   type ParsedCsv, type ColumnMapping

@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import {
-  MIGRATIONS, SCHEMA, SCHEMA_VERSION,
+  MIGRATIONS, SCHEMA, SCHEMA_VERSION, TABLES,
   type Cookie, type HttpRequest, type HttpResponse
 } from '@ludoteca/core'
 
@@ -32,10 +32,9 @@ function getDb(): Database.Database {
     // WAL lets both shells read at once with a single writer.
     db.pragma('journal_mode = WAL')
 
-    // CREATE TABLE IF NOT EXISTS never alters an existing table, so a database written
-    // by an older build needs the migrations applied on top.
     const existing = Number((db.pragma('user_version', { simple: true }) as number) ?? 0)
     db.exec(SCHEMA)
+    addMissingColumns(db)
     for (const migration of MIGRATIONS.filter((m) => m.version > existing && existing > 0)) {
       db.exec(migration.sql)
     }
@@ -45,6 +44,39 @@ function getDb(): Database.Database {
 }
 
 // Secrets stay per-shell: safeStorage and Tauri's keyring share no format.
+interface ColumnInfo {
+  name: string
+  type: string
+  notnull: number
+  dflt_value: string | null
+}
+
+/**
+ * CREATE TABLE IF NOT EXISTS never alters an existing table, so a database written by an
+ * older build is missing every column added since. SCHEMA is applied to a throwaway
+ * in-memory database and the live tables are reconciled against it, which keeps this
+ * correct without anyone having to remember to write an additive migration.
+ */
+function addMissingColumns(target: Database.Database): void {
+  const reference = new Database(':memory:')
+  try {
+    reference.exec(SCHEMA)
+    for (const table of TABLES) {
+      const want = reference.pragma(`table_info(${table})`) as ColumnInfo[]
+      const have = new Set((target.pragma(`table_info(${table})`) as ColumnInfo[]).map((c) => c.name))
+
+      for (const column of want.filter((c) => !have.has(c.name))) {
+        // SQLite requires a default on any NOT NULL column added to an existing table.
+        const notNull = column.notnull && column.dflt_value !== null ? ' NOT NULL' : ''
+        const defaultTo = column.dflt_value !== null ? ` DEFAULT ${column.dflt_value}` : ''
+        target.exec(`ALTER TABLE ${table} ADD COLUMN ${column.name} ${column.type}${notNull}${defaultTo}`)
+      }
+    }
+  } finally {
+    reference.close()
+  }
+}
+
 function secretsPath(): string {
   return join(sharedDataDir(), 'secrets.electron.json')
 }

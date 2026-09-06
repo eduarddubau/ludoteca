@@ -41,7 +41,18 @@ CREATE TABLE IF NOT EXISTS sync_state (
 );
 `
 
-/** Applied in order to any database older than SCHEMA_VERSION. Fresh ones get SCHEMA. */
-export const MIGRATIONS: { version: number; sql: string }[] = [
-  { version: 3, sql: `ALTER TABLE game ADD COLUMN enriched_at TEXT;` }
-]
+/** Tables reconciled column-by-column against SCHEMA when a database is opened. */
+export const TABLES = ['game', 'sync_state'] as const
+
+/**
+ * Non-additive changes only — anything a column comparison cannot work out for itself,
+ * such as a rename, a type change or a backfill.
+ *
+ * Additive columns need no entry here: the shell diffs the live table against SCHEMA and
+ * adds whatever is missing. That is deliberate. Hand-written additive migrations have to
+ * be kept in step with SCHEMA by memory, and on 2026-09-06 they were not — SCHEMA_VERSION
+ * went to 2 for `metacritic_url` and `store_url` with no migration written, so every
+ * insert failed against an existing database with an error naming only the first missing
+ * column.
+ */
+export const MIGRATIONS: { version: number; sql: string }[] = []
