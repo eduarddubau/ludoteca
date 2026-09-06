@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+
+# Notes and per-machine permissions live in llm-rulebase, reached through this
+# symlink. Bare, with no trailing slash — the usual `.claude/` pattern does not
+# match a symlink.
+.claude
+
+# Spike credentials. A refresh token is a live Steam session.
+*.token.json
