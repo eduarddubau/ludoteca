@@ -25,6 +25,7 @@ const descending = ref(false)
 
 const progress = ref<EnrichProgress | null>(null)
 const abort = ref({ aborted: false })
+const enrichError = ref('')
 
 const unenriched = computed(() => games.value.filter(needsEnrichment).length)
 
@@ -73,6 +74,7 @@ function onSort(key: SortKey): void {
 async function enrich(): Promise<void> {
   const platform = usePlatform()
   abort.value = { aborted: false }
+  enrichError.value = ''
   progress.value = { done: 0, total: games.value.length, title: '', matched: false }
   try {
     const next = await enrichLibrary(platform, games.value, {
@@ -82,6 +84,10 @@ async function enrich(): Promise<void> {
       onCheckpoint: (partial) => replaceGames(platform, partial)
     })
     await persist(next)
+  } catch (err) {
+    // Whatever went wrong, say so — a run that just stops tells the user nothing.
+    enrichError.value = err instanceof Error ? err.message : String(err)
+    games.value = await loadGames(platform)
   } finally {
     progress.value = null
   }
@@ -135,6 +141,10 @@ async function persist(next: OwnedGame[]): Promise<void> {
 
     <p v-if="progress" class="muted panel">
       Enriching {{ progress.done }} / {{ progress.total }} — {{ progress.title }}
+    </p>
+    <p v-if="enrichError" class="panel error">
+      Enrichment stopped: {{ enrichError }}
+      <br /><span class="muted">Anything already fetched was saved — press Fetch metadata to resume.</span>
     </p>
 
     <ImportPanel v-if="showImport" @imported="persist" />

@@ -34,14 +34,53 @@ const normalize = (s: string): string =>
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
-async function json<T>(platform: Platform, url: string): Promise<T | null> {
-  const response = await platform.http({ url })
-  if (response.status !== 200) return null
-  try {
-    return JSON.parse(response.body) as T
-  } catch {
-    return null
+/** Steam refused or the request failed — distinct from "Steam does not have this game". */
+export class EnrichTransientError extends Error {
+  constructor(public readonly url: string, message: string) {
+    super(message)
+    this.name = 'EnrichTransientError'
   }
+}
+
+const RETRY_DELAYS_MS = [1000, 4000, 12000]
+
+/**
+ * A throttled or failed request must never be mistaken for a game Steam does not carry:
+ * that would stamp enrichedAt and permanently record the game as having no metadata.
+ * Transient failures are retried with backoff and then raised.
+ */
+async function json<T>(platform: Platform, url: string): Promise<T | null> {
+  let lastProblem = 'unknown'
+
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) await sleep(RETRY_DELAYS_MS[attempt - 1])
+
+    let response
+    try {
+      response = await platform.http({ url })
+    } catch (err) {
+      lastProblem = err instanceof Error ? err.message : String(err)
+      continue
+    }
+
+    // 429 and 5xx are Steam pushing back; retrying is the correct response.
+    if (response.status === 429 || response.status >= 500) {
+      lastProblem = `HTTP ${response.status}`
+      continue
+    }
+
+    // A definitive answer, even a 404: the game is simply not there.
+    if (response.status !== 200) return null
+
+    try {
+      return JSON.parse(response.body) as T
+    } catch {
+      // Steam serves an HTML error page under a 200 when it is unhappy.
+      lastProblem = 'non-JSON response'
+    }
+  }
+
+  throw new EnrichTransientError(url, `Steam kept failing (${lastProblem}) after ${RETRY_DELAYS_MS.length + 1} attempts.`)
 }
 
 // Editions Steam ships under a longer name than the game is commonly called.
@@ -122,10 +161,9 @@ export async function enrichGame(platform: Platform, game: OwnedGame): Promise<O
     coverUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${hit.id}/library_600x900.jpg`,
     genres: details?.genres?.map((g) => g.description) ?? game.genres,
     releaseYear: releaseYear(details?.release_date?.date) ?? game.releaseYear,
-    storeUrl:
-      game.store === 'steam'
-        ? `https://store.steampowered.com/app/${hit.id}`
-        : game.storeUrl,
+    // Steam's page is used regardless of where the game was bought: Epic exclusives are
+    // rare, and a real store page beats a search link. `store` still records ownership.
+    storeUrl: `https://store.steampowered.com/app/${hit.id}`,
     enrichedAt: attemptedAt
   }
 }
@@ -146,7 +184,16 @@ export async function enrichLibrary(
   for (const [index, game] of pending.entries()) {
     if (signal?.aborted) break
 
-    const enriched = await enrichGame(platform, game)
+    let enriched: OwnedGame
+    try {
+      enriched = await enrichGame(platform, game)
+    } catch (err) {
+      // Save what this run achieved before surfacing the failure, or everything since
+      // the last checkpoint is lost and has no enrichedAt to resume from.
+      await onCheckpoint?.(merged())
+      throw err
+    }
+
     results.set(`${game.store}:${game.storeGameId}`, enriched)
     onProgress?.({
       done: index + 1,
