@@ -12,7 +12,10 @@ export interface SerializedPattern {
   flags: string
 }
 
-const STORE_PARTITION = 'persist:stores'
+// Deliberately not 'persist:' — Electron would write the session cookie jar to disk
+// unencrypted, next to a UI that promises credentials live in the OS keychain. The
+// durable copy is what a connector puts in `secrets`; this partition is scratch.
+const STORE_PARTITION = 'stores'
 
 // Opened on first use, not at import: app paths are only meaningful once Electron owns
 // the process, and a failure here should surface at a call site rather than at load.
