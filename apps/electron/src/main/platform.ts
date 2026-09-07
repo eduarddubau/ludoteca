@@ -109,6 +109,7 @@ export async function authenticate(
   timeoutMs?: number
 ): Promise<{ redirectUrl: string; cookies: Cookie[] }> {
   const match = new RegExp(pattern.source, pattern.flags)
+  requireHttps(url, 'A sign-in page')
 
   const authWindow = new BrowserWindow({
     width: 980,
@@ -211,11 +212,30 @@ function isPopupAllowed(target: string): boolean {
 
 // Same partition as the auth window, or the login session's cookies are invisible here.
 export async function cookies(url: string): Promise<Cookie[]> {
+  requireHttps(url, 'A cookie lookup')
   const raw = await session.fromPartition(STORE_PARTITION).cookies.get({ url })
   return raw.map((c) => ({ name: c.name, value: c.value, domain: c.domain ?? '' }))
 }
 
+/**
+ * The bridge is https-only. net.fetch happily serves file:// — a renderer asking for
+ * file:///etc/passwd got 200 and the contents — so an unconstrained URL here turns any
+ * renderer flaw into arbitrary local file read, with this same bridge available to post
+ * it back out. Every store endpoint is https, so nothing legitimate is lost.
+ */
+function requireHttps(raw: string, what: string): URL {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    throw new Error(`${what} needs a valid URL.`)
+  }
+  if (url.protocol !== 'https:') throw new Error(`${what} allows https only, not ${url.protocol}`)
+  return url
+}
+
 export async function http(request: HttpRequest): Promise<HttpResponse> {
+  requireHttps(request.url, 'A store request')
   const response = await net.fetch(request.url, {
     method: request.method ?? 'GET',
     headers: request.headers,
@@ -229,9 +249,6 @@ export async function http(request: HttpRequest): Promise<HttpResponse> {
 }
 
 export const database = {
-  exec: async (sql: string): Promise<void> => {
-    getDb().exec(sql)
-  },
   query: async (sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> =>
     getDb().prepare(sql).all(...params) as Record<string, unknown>[],
   run: async (sql: string, params: unknown[] = []): Promise<void> => {
@@ -245,8 +262,16 @@ function readSecrets(): Record<string, string> {
   return JSON.parse(readFileSync(file, 'utf8')) as Record<string, string>
 }
 
+/** Connector keys only, so a renderer flaw cannot range over the whole keychain file. */
+const SECRET_KEY = /^(steam|gog|epic|other)\.(refreshToken|cookies)$/
+
+function requireKnownKey(key: string): void {
+  if (!SECRET_KEY.test(key)) throw new Error(`Refused: "${key}" is not a connector secret.`)
+}
+
 export const secrets = {
   get: async (key: string): Promise<string | null> => {
+    requireKnownKey(key)
     const stored = readSecrets()[key]
     if (!stored) return null
     try {
@@ -260,6 +285,7 @@ export const secrets = {
     }
   },
   set: async (key: string, value: string): Promise<void> => {
+    requireKnownKey(key)
     // A refresh token in a plain file is the exact liability that has already bitten us.
     if (!safeStorage.isEncryptionAvailable()) {
       throw new Error('OS keychain unavailable — refusing to store a token unencrypted.')
@@ -269,6 +295,7 @@ export const secrets = {
     writeFileSync(secretsPath(), JSON.stringify(all, null, 2), { mode: 0o600 })
   },
   delete: async (key: string): Promise<void> => {
+    requireKnownKey(key)
     const all = readSecrets()
     delete all[key]
     writeFileSync(secretsPath(), JSON.stringify(all, null, 2), { mode: 0o600 })

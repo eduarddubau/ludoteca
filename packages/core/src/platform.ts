@@ -35,8 +35,11 @@ export interface AuthRequest {
   timeoutMs?: number
 }
 
+/**
+ * Parameterised statements only. Schema and migrations run inside the shell on its own
+ * handle, so no caller needs to send arbitrary multi-statement SQL across the bridge.
+ */
 export interface Database {
-  exec(sql: string): Promise<void>
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>
   run(sql: string, params?: unknown[]): Promise<void>
 }

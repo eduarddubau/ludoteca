@@ -204,7 +204,6 @@ function registerPlatformHandlers(): void {
   handle('platform:cookies', (url: string) => cookies(url))
   handle('platform:http', (request: HttpRequest) => http(request))
 
-  handle('db:exec', (sql: string) => database.exec(sql))
   handle('db:query', (sql: string, params?: unknown[]) => database.query(sql, params))
   handle('db:run', (sql: string, params?: unknown[]) => database.run(sql, params))
 

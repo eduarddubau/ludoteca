@@ -16,7 +16,6 @@ const bridge: Platform = {
   cookies: (url: string) => ipcRenderer.invoke('platform:cookies', url),
   http: (request: HttpRequest) => ipcRenderer.invoke('platform:http', request),
   db: {
-    exec: (sql: string) => ipcRenderer.invoke('db:exec', sql),
     query: (sql: string, params?: unknown[]) => ipcRenderer.invoke('db:query', sql, params),
     run: (sql: string, params?: unknown[]) => ipcRenderer.invoke('db:run', sql, params)
   },
