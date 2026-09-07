@@ -1,32 +1,38 @@
-import type { OwnedGame } from '@ludoteca/core'
+import type { LibraryEntry } from '@ludoteca/core'
 
-export type SortKey = 'title' | 'store' | 'playStatus' | 'hours' | 'criticScore' | 'releaseYear'
+export type SortKey = 'criticScore' | 'title' | 'stores' | 'playStatus' | 'hours' | 'releaseYear'
 
 export const SORT_COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'criticScore', label: 'Score' },
   { key: 'title', label: 'Title' },
-  { key: 'store', label: 'Store' },
+  { key: 'stores', label: 'Stores' },
   { key: 'playStatus', label: 'Status' },
   { key: 'hours', label: 'Hours' },
-  { key: 'criticScore', label: 'Score' },
   { key: 'releaseYear', label: 'Year' }
 ]
 
 // Missing values sink to the bottom in both directions — an absent score is not a zero.
-function rank(game: OwnedGame, key: SortKey): number | string {
+function rank(entry: LibraryEntry, key: SortKey): number | string {
   switch (key) {
     case 'hours':
-      return game.playtimeMinutes ?? -1
+      return entry.playtimeMinutes ?? -1
     case 'criticScore':
-      return game.criticScore ?? -1
+      return entry.criticScore ?? -1
     case 'releaseYear':
-      return game.releaseYear ?? -1
+      return entry.releaseYear ?? -1
+    case 'stores':
+      return entry.stores.join('+')
     default:
-      return String(game[key])
+      return String(entry[key])
   }
 }
 
-export function sortGames(games: OwnedGame[], key: SortKey, descending: boolean): OwnedGame[] {
-  const sorted = [...games].sort((a, b) => {
+export function sortEntries(
+  entries: LibraryEntry[],
+  key: SortKey,
+  descending: boolean
+): LibraryEntry[] {
+  const sorted = [...entries].sort((a, b) => {
     const left = rank(a, key)
     const right = rank(b, key)
     return typeof left === 'number' && typeof right === 'number'

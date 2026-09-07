@@ -1,4 +1,5 @@
 import type { OwnedGame, StoreId } from './connectors/types.js'
+import type { GameSource, LibraryEntry } from './library/merge.js'
 
 // Exact links need an id that enrichment has not resolved yet, so everything falls back
 // to that store's search. A search link that works today beats a dead link.
@@ -23,6 +24,23 @@ export function storeLink(game: OwnedGame): GameLink {
   }
 
   return { url: SEARCH[game.store](game.title), exact: false }
+}
+
+/** One link per store an entry is owned on. */
+export function sourceLink(source: GameSource, title: string): GameLink {
+  if (source.storeUrl) return { url: source.storeUrl, exact: true }
+  if (source.store === 'steam' && /^\d+$/.test(source.storeGameId)) {
+    return { url: `https://store.steampowered.com/app/${source.storeGameId}`, exact: true }
+  }
+  return { url: SEARCH[source.store](title), exact: false }
+}
+
+export function entryMetacriticLink(entry: LibraryEntry): GameLink {
+  if (entry.metacriticUrl) return { url: entry.metacriticUrl, exact: true }
+  return {
+    url: `https://www.metacritic.com/search/${encodeURIComponent(entry.title)}/`,
+    exact: false
+  }
 }
 
 export function metacriticLink(game: OwnedGame): GameLink {

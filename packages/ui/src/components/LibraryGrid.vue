@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import type { OwnedGame } from '@ludoteca/core'
+import type { LibraryEntry } from '@ludoteca/core'
 import GameTile from './GameTile.vue'
 
-defineProps<{ games: OwnedGame[] }>()
-const emit = defineEmits<{ enrich: [game: OwnedGame] }>()
+defineProps<{ entries: LibraryEntry[]; needsFetch: (entry: LibraryEntry) => boolean }>()
+const emit = defineEmits<{ enrich: [entry: LibraryEntry] }>()
 </script>
 
 <template>
-  <div v-if="games.length" class="grid">
+  <div v-if="entries.length" class="grid">
     <GameTile
-      v-for="game in games"
-      :key="`${game.store}:${game.storeGameId}`"
-      :game="game"
+      v-for="entry in entries"
+      :key="entry.key"
+      :entry="entry"
+      :needs-fetch="needsFetch(entry)"
       @enrich="emit('enrich', $event)"
     />
   </div>

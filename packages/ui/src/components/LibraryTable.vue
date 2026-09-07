@@ -1,13 +1,32 @@
 <script setup lang="ts">
-import { metacriticLink, needsEnrichment, storeLink, type OwnedGame } from '@ludoteca/core'
+import { entryMetacriticLink, STATUS_LABEL, type LibraryEntry } from '@ludoteca/core'
 import { SORT_COLUMNS, type SortKey } from '../lib/sort'
 import ScoreChip from './ScoreChip.vue'
+import StoreLinks from './StoreLinks.vue'
 
-defineProps<{ games: OwnedGame[]; sortKey: SortKey; descending: boolean }>()
-const emit = defineEmits<{ sort: [key: SortKey]; enrich: [game: OwnedGame] }>()
+defineProps<{
+  entries: LibraryEntry[]
+  sortKey: SortKey
+  descending: boolean
+  needsFetch: (entry: LibraryEntry) => boolean
+}>()
+const emit = defineEmits<{ sort: [key: SortKey]; enrich: [entry: LibraryEntry] }>()
 
-const hours = (game: OwnedGame): string =>
-  game.playtimeMinutes === undefined ? '—' : Math.round(game.playtimeMinutes / 60).toString()
+// Header and body both iterate SORT_COLUMNS, so reordering a column cannot desync them.
+function cell(entry: LibraryEntry, key: SortKey): string {
+  switch (key) {
+    case 'hours':
+      return entry.playtimeMinutes === undefined
+        ? '—'
+        : String(Math.round(entry.playtimeMinutes / 60))
+    case 'releaseYear':
+      return entry.releaseYear?.toString() ?? '—'
+    case 'playStatus':
+      return STATUS_LABEL[entry.playStatus]
+    default:
+      return entry.title
+  }
+}
 </script>
 
 <template>
@@ -18,7 +37,7 @@ const hours = (game: OwnedGame): string =>
           <th
             v-for="column in SORT_COLUMNS"
             :key="column.key"
-            class="sortable"
+            :class="['sortable', `col-${column.key}`]"
             @click="emit('sort', column.key)"
           >
             {{ column.label
@@ -26,36 +45,27 @@ const hours = (game: OwnedGame): string =>
               sortKey === column.key ? (descending ? ' ▼' : ' ▲') : ''
             }}</span>
           </th>
-          <th>Links</th>
+          <th />
         </tr>
       </thead>
       <tbody>
-        <tr v-for="game in games" :key="`${game.store}:${game.storeGameId}`">
-          <td>{{ game.title }}</td>
-          <td class="cap">{{ game.store }}</td>
-          <td class="cap">{{ game.playStatus }}</td>
-          <td>{{ hours(game) }}</td>
-          <td>
+        <tr v-for="entry in entries" :key="entry.key">
+          <td v-for="column in SORT_COLUMNS" :key="column.key" :class="`col-${column.key}`">
             <ScoreChip
-              :score="game.criticScore"
-              :href="metacriticLink(game).url"
-              :exact="metacriticLink(game).exact"
+              v-if="column.key === 'criticScore'"
+              :score="entry.criticScore"
+              :href="entryMetacriticLink(entry).url"
+              :exact="entryMetacriticLink(entry).exact"
             />
+            <StoreLinks v-else-if="column.key === 'stores'" :entry="entry" />
+            <template v-else>{{ cell(entry, column.key) }}</template>
           </td>
-          <td>{{ game.releaseYear ?? '—' }}</td>
-          <td class="links">
-            <a
-              :href="storeLink(game).url"
-              target="_blank"
-              rel="noreferrer"
-              :class="{ approx: !storeLink(game).exact }"
-              :title="storeLink(game).exact ? 'Store page' : 'Search the store (no exact match yet)'"
-            >{{ game.store }}</a>
+          <td>
             <button
-              v-if="needsEnrichment(game)"
+              v-if="needsFetch(entry)"
               class="row-enrich"
               title="Fetch score, art and genres for this game"
-              @click="emit('enrich', game)"
+              @click="emit('enrich', entry)"
             >
               ↻
             </button>
@@ -63,6 +73,6 @@ const hours = (game: OwnedGame): string =>
         </tr>
       </tbody>
     </table>
-    <p v-if="!games.length" class="muted empty">Nothing matches those filters.</p>
+    <p v-if="!entries.length" class="muted empty">Nothing matches those filters.</p>
   </div>
 </template>

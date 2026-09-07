@@ -17,7 +17,15 @@ body {
   font: 14px/1.5 system-ui, sans-serif;
 }
 
-.app { padding: 24px; max-width: 900px; margin: 0 auto; }
+/* Fills the window rather than sitting in a fixed column: this is a data-dense app,
+   not prose, so a hard max-width just wastes wide screens. The cap only stops the table
+   stretching absurdly on an ultrawide, and padding scales with the viewport. */
+.app {
+  width: 100%;
+  max-width: 2200px;
+  margin: 0 auto;
+  padding: clamp(16px, 2.5vw, 40px);
+}
 h1 { font-size: 20px; margin: 0 0 4px; }
 .muted { color: var(--muted); }
 
@@ -126,8 +134,8 @@ input[type='file'] { color: var(--muted); }
 .grid {
   margin-top: 16px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 12vw, 200px), 1fr));
+  gap: clamp(10px, 1.2vw, 20px);
 }
 
 .tile {
@@ -224,3 +232,86 @@ input[type='file'] { color: var(--muted); }
   font-size: 12px;
   line-height: 1.4;
 }
+
+/* Predictable columns stay narrow; the title absorbs the slack, so widening the window
+   grows the part that benefits rather than spreading everything thin. */
+.col-title { width: 100%; white-space: normal; min-width: 220px; }
+.col-criticScore,
+.col-store,
+.col-playStatus,
+.col-hours,
+.col-releaseYear { width: 1%; }
+th.col-criticScore, td.col-criticScore { text-align: center; }
+td.col-hours, td.col-releaseYear { text-align: right; }
+
+/* ---- toolbar: search, then one group per kind of action ---- */
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+.group:first-of-type { padding-left: 0; border-left: none; }
+
+/* ---- export format menu ---- */
+.menu-anchor { position: relative; }
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 11;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+.menu button {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 6px 10px;
+}
+.menu button:hover { background: #262b34; color: var(--accent); }
+
+.mapping .actions { display: flex; gap: 8px; margin-top: 12px; }
+
+/* Store links: one per store an entry is owned on, so a merged game shows both. */
+.store-links { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.store-link {
+  color: var(--accent);
+  text-transform: capitalize;
+  text-decoration: none;
+  font-size: 12px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+.store-link:hover { border-color: var(--accent); }
+/* A search fallback, not the game's own page. */
+.store-link.approx { color: var(--muted); border-style: dashed; }
+
+.scrim .store-links { gap: 4px; }
+.scrim .store-link { background: rgba(16, 19, 26, 0.8); }
+
+.col-stores { width: 1%; white-space: nowrap; }

@@ -1,54 +1,55 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { metacriticLink, needsEnrichment, storeLink, type OwnedGame } from '@ludoteca/core'
+import { entryMetacriticLink, sourceLink, STATUS_LABEL, type LibraryEntry } from '@ludoteca/core'
 import ScoreChip from './ScoreChip.vue'
+import StoreLinks from './StoreLinks.vue'
 
-const props = defineProps<{ game: OwnedGame }>()
-const emit = defineEmits<{ enrich: [game: OwnedGame] }>()
+const props = defineProps<{ entry: LibraryEntry; needsFetch: boolean }>()
+const emit = defineEmits<{ enrich: [entry: LibraryEntry] }>()
 
-const store = computed(() => storeLink(props.game))
-const metacritic = computed(() => metacriticLink(props.game))
+const metacritic = computed(() => entryMetacriticLink(props.entry))
+const primary = computed(() => sourceLink(props.entry.sources[0], props.entry.title))
 const hours = computed(() =>
-  props.game.playtimeMinutes === undefined
+  props.entry.playtimeMinutes === undefined
     ? null
-    : `${Math.round(props.game.playtimeMinutes / 60)}h`
+    : `${Math.round(props.entry.playtimeMinutes / 60)}h`
 )
 </script>
 
 <template>
   <article class="tile">
     <div class="art">
-      <img v-if="game.coverUrl" :src="game.coverUrl" :alt="game.title" loading="lazy" />
-      <div v-else class="art-fallback"><span>{{ game.title }}</span></div>
+      <img v-if="entry.coverUrl" :src="entry.coverUrl" :alt="entry.title" loading="lazy" />
+      <div v-else class="art-fallback"><span>{{ entry.title }}</span></div>
 
       <div class="scrim">
-        <span class="store-tag">{{ game.store }}</span>
+        <StoreLinks :entry="entry" />
         <span v-if="hours" class="hours">{{ hours }}</span>
       </div>
 
       <ScoreChip
         class="tile-score"
-        :score="game.criticScore"
+        :score="entry.criticScore"
         :href="metacritic.url"
         :exact="metacritic.exact"
       />
 
       <button
-        v-if="needsEnrichment(game)"
+        v-if="needsFetch"
         class="tile-enrich"
         title="Fetch score, art and genres for this game"
-        @click="emit('enrich', game)"
+        @click="emit('enrich', entry)"
       >
         ↻
       </button>
     </div>
 
     <div class="meta">
-      <a :href="store.url" target="_blank" rel="noreferrer" class="title" :title="game.title">
-        {{ game.title }}
+      <a :href="primary.url" target="_blank" rel="noreferrer" class="title" :title="entry.title">
+        {{ entry.title }}
       </a>
       <p class="muted sub">
-        {{ game.releaseYear ?? '—' }} · {{ game.playStatus }}
+        {{ entry.releaseYear ?? '—' }} · {{ STATUS_LABEL[entry.playStatus] }}
       </p>
     </div>
   </article>

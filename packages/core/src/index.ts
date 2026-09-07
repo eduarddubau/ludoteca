@@ -10,8 +10,17 @@ export {
   type ParsedCsv, type ColumnMapping
 } from './import/csv.js'
 export { sampleLibrary } from './import/sample.js'
-export { storeLink, metacriticLink, scoreBand, type GameLink } from './links.js'
+export {
+  storeLink, metacriticLink, sourceLink, entryMetacriticLink, scoreBand,
+  type GameLink
+} from './links.js'
 export {
   enrichGame, enrichLibrary, needsEnrichment, EnrichTransientError,
   type EnrichProgress, type EnrichOptions
 } from './enrich/steam.js'
+export { toCsv, toJson } from './export/csv.js'
+export { fromJson } from './import/json.js'
+export {
+  mergeLibrary, STATUS_LABEL,
+  type LibraryEntry, type GameSource
+} from './library/merge.js'
