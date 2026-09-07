@@ -1,5 +1,5 @@
 import type { Platform } from '../platform.js'
-import type { OwnedGame, StoreConnector } from './types.js'
+import type { AuthResultSummary, OwnedGame, StoreConnector } from './types.js'
 
 // GOG Galaxy's own OAuth client. You cannot register your own, and the redirect below is
 // fixed by that client — which is why a loopback callback is no use and the sign-in has
@@ -49,7 +49,7 @@ export class GogConnector implements StoreConnector {
     return (await this.platform.secrets.get(TOKEN_KEY)) !== null
   }
 
-  async authenticate(): Promise<void> {
+  async authenticate(): Promise<AuthResultSummary> {
     const result = await this.platform.authenticate({
       url: AUTH_URL,
       // GOG hops auth.gog.com → login.gog.com before landing here.
@@ -66,6 +66,17 @@ export class GogConnector implements StoreConnector {
       redirect_uri: REDIRECT_URL
     })
     await this.platform.secrets.set(TOKEN_KEY, token.refresh_token)
+    return { accountName: await this.username(token.access_token) }
+  }
+
+  /** The token response carries only a user id, so the display name needs its own call. */
+  private async username(accessToken: string): Promise<string | undefined> {
+    const response = await this.platform.http({
+      url: 'https://embed.gog.com/userData.json',
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+    if (response.status !== 200) return undefined
+    return (JSON.parse(response.body) as { username?: string }).username
   }
 
   private async exchange(params: Record<string, string>): Promise<TokenResponse> {

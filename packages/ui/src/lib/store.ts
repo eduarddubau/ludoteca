@@ -89,8 +89,12 @@ export function useLibrary() {
     const platform = usePlatform()
     connecting.value = store
     try {
-      await connectorFor(platform, store).authenticate()
-      await saveConnection(platform, { store, status: 'connected' })
+      const summary = await connectorFor(platform, store).authenticate()
+      await saveConnection(platform, {
+        store,
+        status: 'connected',
+        accountName: summary.accountName
+      })
       connections.value = await loadConnections(platform)
       await sync(store)
       return

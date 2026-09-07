@@ -39,9 +39,14 @@ export interface OwnedGame {
   addedManually?: boolean
 }
 
+export interface AuthResultSummary {
+  /** Shown on the store card so the user can confirm the right account was linked. */
+  accountName?: string
+}
+
 export interface StoreConnector {
   readonly id: StoreId
   isAuthenticated(): Promise<boolean>
-  authenticate(): Promise<void>
+  authenticate(): Promise<AuthResultSummary>
   fetchLibrary(): Promise<OwnedGame[]>
 }

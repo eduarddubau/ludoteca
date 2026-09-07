@@ -1,5 +1,5 @@
 import type { Platform } from '../platform.js'
-import type { OwnedGame, StoreConnector } from './types.js'
+import type { AuthResultSummary, OwnedGame, StoreConnector } from './types.js'
 
 // The Epic Games Launcher's own OAuth client, as used by Legendary and Heroic. Epic
 // publishes no library API, so this is the only route — and Epic's own redirect page
@@ -58,7 +58,7 @@ export class EpicConnector implements StoreConnector {
    * the webview is used only to establish a session, and the code is then read by calling
    * the redirect endpoint with that session's cookies.
    */
-  async authenticate(): Promise<void> {
+  async authenticate(): Promise<AuthResultSummary> {
     const result = await this.platform.authenticate({
       url: LOGIN_URL,
       redirectPattern: /\/id\/api\/redirect/,
@@ -85,6 +85,7 @@ export class EpicConnector implements StoreConnector {
       token_type: 'eg1'
     })
     await this.platform.secrets.set(TOKEN_KEY, token.refresh_token)
+    return { accountName: token.displayName }
   }
 
   private async exchange(params: Record<string, string>): Promise<TokenResponse> {

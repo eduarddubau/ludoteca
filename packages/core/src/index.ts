@@ -2,7 +2,9 @@ export type {
   Platform, AuthRequest, AuthResult, Cookie,
   HttpRequest, HttpResponse, Database, SecretStore
 } from './platform.js'
-export type { StoreId, Ownership, OwnedGame, PlayStatus, StoreConnector } from './connectors/types.js'
+export type {
+  StoreId, Ownership, OwnedGame, PlayStatus, StoreConnector, AuthResultSummary
+} from './connectors/types.js'
 export { STORE_IDS } from './connectors/types.js'
 export {
   applyUserData, reconcileImport, preserveEnrichment, gameKey, EDITABLE_FIELDS,

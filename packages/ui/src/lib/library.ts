@@ -209,7 +209,8 @@ export async function saveConnection(
      ON CONFLICT(store) DO UPDATE SET
        last_synced_at = excluded.last_synced_at,
        last_error = excluded.last_error,
-       account_name = excluded.account_name,
+       -- COALESCE: a sync writes no account name and must not erase the one from sign-in.
+       account_name = COALESCE(excluded.account_name, sync_state.account_name),
        retry_after = excluded.retry_after`,
     [
       connection.store,
