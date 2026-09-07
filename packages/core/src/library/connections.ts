@@ -28,8 +28,8 @@ export const STORE_PROFILES: StoreProfile[] = [
     label: 'Steam',
     blurb: 'Owned games, playtime, and the family-shared library.',
     caveat:
-      'Halted: repeated sign-ins triggered an account restriction. Not reconnectable until that is resolved and tested on a throwaway account.',
-    connectable: false
+      'Signs in through Steam\u2019s ordinary web login \u2014 the approach Lutris uses. This replaces an earlier one that impersonated the Steam mobile app and got an account restricted. Still untested since: use a throwaway account first.',
+    connectable: true
   },
   {
     store: 'gog',

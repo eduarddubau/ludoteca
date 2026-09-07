@@ -1,3 +1,4 @@
+import { storeJson, storeRequest } from './http.js'
 import type { Platform } from '../platform.js'
 import type { AuthResultSummary, OwnedGame, StoreConnector } from './types.js'
 
@@ -8,7 +9,8 @@ import type { AuthResultSummary, OwnedGame, StoreConnector } from './types.js'
 const CLIENT_ID = '34a02cf8f4414e29b15921876da36f9a'
 const CLIENT_SECRET = 'daafbccc737745039dffe53d94fc76cf'
 
-const TOKEN_URL = 'https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/token'
+const OAUTH_BASE = 'https://account-public-service-prod03.ol.epicgames.com'
+const TOKEN_URL = `${OAUTH_BASE}/account/api/oauth/token`
 const REDIRECT_URL = `https://www.epicgames.com/id/api/redirect?clientId=${CLIENT_ID}&responseType=code`
 const LOGIN_URL = `https://www.epicgames.com/id/login?redirectUrl=${encodeURIComponent(REDIRECT_URL)}`
 const LIBRARY_URL = 'https://library-service.live.use1a.on.epicgames.com/library/api/public/items'
@@ -54,6 +56,25 @@ export class EpicConnector implements StoreConnector {
   }
 
   /**
+   * Asks Epic whether the session is still good, rather than inferring it from a stored
+   * token's existence. This is what makes an "expired" card honest.
+   */
+  async verify(): Promise<boolean> {
+    try {
+      const accessToken = await this.accessToken()
+      const response = await this.platform.http(
+        storeRequest({
+          url: `${OAUTH_BASE}/account/api/oauth/verify`,
+          headers: { Authorization: `bearer ${accessToken}` }
+        })
+      )
+      return response.status === 200
+    } catch {
+      return false
+    }
+  }
+
+  /**
    * Epic hands the authorization code back in a JSON *body*, not a URL — unlike GOG. So
    * the webview is used only to establish a session, and the code is then read by calling
    * the redirect endpoint with that session's cookies.
@@ -66,15 +87,11 @@ export class EpicConnector implements StoreConnector {
     })
 
     const cookieHeader = result.cookies.map((c) => `${c.name}=${c.value}`).join('; ')
-    const response = await this.platform.http({
-      url: REDIRECT_URL,
-      headers: { Cookie: cookieHeader }
-    })
-    if (response.status !== 200) {
-      throw new Error(`Epic redirect endpoint returned HTTP ${response.status}.`)
-    }
-
-    const { authorizationCode } = JSON.parse(response.body) as { authorizationCode: string | null }
+    const { authorizationCode } = await storeJson<{ authorizationCode: string | null }>(
+      this.platform,
+      'Epic',
+      { url: REDIRECT_URL, headers: { Cookie: cookieHeader } }
+    )
     if (!authorizationCode) {
       throw new Error('Epic returned no authorization code — the sign-in did not complete.')
     }
@@ -89,7 +106,7 @@ export class EpicConnector implements StoreConnector {
   }
 
   private async exchange(params: Record<string, string>): Promise<TokenResponse> {
-    const response = await this.platform.http({
+    return storeJson<TokenResponse>(this.platform, 'Epic', {
       url: TOKEN_URL,
       method: 'POST',
       headers: {
@@ -98,10 +115,6 @@ export class EpicConnector implements StoreConnector {
       },
       body: new URLSearchParams(params).toString()
     })
-    if (response.status !== 200) {
-      throw new Error(`Epic token exchange failed (HTTP ${response.status}).`)
-    }
-    return JSON.parse(response.body) as TokenResponse
   }
 
   private async accessToken(): Promise<string> {
@@ -126,15 +139,10 @@ export class EpicConnector implements StoreConnector {
       url.searchParams.set('includeMetadata', 'true')
       if (cursor) url.searchParams.set('cursor', cursor)
 
-      const response = await this.platform.http({
+      const page = await storeJson<LibraryPage>(this.platform, 'Epic', {
         url: url.toString(),
         headers: { Authorization: `bearer ${accessToken}` }
       })
-      if (response.status !== 200) {
-        throw new Error(`Epic library request failed (HTTP ${response.status}).`)
-      }
-
-      const page = JSON.parse(response.body) as LibraryPage
       all.push(...page.records)
       cursor = page.responseMetadata?.nextCursor
     } while (cursor)
@@ -158,13 +166,18 @@ export class EpicConnector implements StoreConnector {
       url.searchParams.set('country', 'US')
       url.searchParams.set('locale', 'en')
 
-      const response = await this.platform.http({
-        url: url.toString(),
-        headers: { Authorization: `bearer ${accessToken}` }
-      })
       // A namespace can fail on its own; one bad batch should not lose the whole library.
-      if (response.status !== 200) continue
-      Object.assign(found, JSON.parse(response.body) as Record<string, CatalogItem>)
+      try {
+        Object.assign(
+          found,
+          await storeJson<Record<string, CatalogItem>>(this.platform, 'Epic', {
+            url: url.toString(),
+            headers: { Authorization: `bearer ${accessToken}` }
+          })
+        )
+      } catch {
+        continue
+      }
     }
 
     return found

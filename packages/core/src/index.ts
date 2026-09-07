@@ -12,6 +12,7 @@ export {
 } from './library/userdata.js'
 export { GogConnector } from './connectors/gog.js'
 export { EpicConnector } from './connectors/epic.js'
+export { SteamConnector } from './connectors/steam.js'
 export { SCHEMA, SCHEMA_VERSION, MIGRATIONS, TABLES } from './db/schema.js'
 export {
   parseCsv, suggestMapping, toOwnedGames, EMPTY_MAPPING,
@@ -37,3 +38,4 @@ export {
   STORE_PROFILES, tokenKey, canConnect, cooldownSeconds,
   type StoreConnection, type ConnectionStatus, type StoreProfile
 } from './library/connections.js'
+export { storeJson, storeRequest, SessionExpiredError } from './connectors/http.js'

@@ -1,3 +1,4 @@
+import { storeJson } from './http.js'
 import type { Platform } from '../platform.js'
 import type { AuthResultSummary, OwnedGame, StoreConnector } from './types.js'
 
@@ -71,12 +72,16 @@ export class GogConnector implements StoreConnector {
 
   /** The token response carries only a user id, so the display name needs its own call. */
   private async username(accessToken: string): Promise<string | undefined> {
-    const response = await this.platform.http({
-      url: 'https://embed.gog.com/userData.json',
-      headers: { Authorization: `Bearer ${accessToken}` }
-    })
-    if (response.status !== 200) return undefined
-    return (JSON.parse(response.body) as { username?: string }).username
+    try {
+      const data = await storeJson<{ username?: string }>(this.platform, 'GOG', {
+        url: 'https://embed.gog.com/userData.json',
+        headers: { Authorization: `Bearer ${accessToken}` }
+      })
+      return data.username
+    } catch {
+      // A missing display name is cosmetic; it must not fail the sign-in.
+      return undefined
+    }
   }
 
   private async exchange(params: Record<string, string>): Promise<TokenResponse> {
@@ -85,11 +90,7 @@ export class GogConnector implements StoreConnector {
     url.searchParams.set('client_secret', CLIENT_SECRET)
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
 
-    const response = await this.platform.http({ url: url.toString() })
-    if (response.status !== 200) {
-      throw new Error(`GOG token exchange failed (HTTP ${response.status}).`)
-    }
-    return JSON.parse(response.body) as TokenResponse
+    return storeJson<TokenResponse>(this.platform, 'GOG', { url: url.toString() })
   }
 
   /** Access tokens last about an hour, so one is minted per sync from the refresh token. */
@@ -114,15 +115,10 @@ export class GogConnector implements StoreConnector {
     let totalPages = 1
 
     do {
-      const response = await this.platform.http({
+      const body = await storeJson<ProductsPage>(this.platform, 'GOG', {
         url: `https://embed.gog.com/account/getFilteredProducts?mediaType=1&page=${page}`,
         headers: { Authorization: `Bearer ${accessToken}` }
       })
-      if (response.status !== 200) {
-        throw new Error(`GOG library request failed (HTTP ${response.status}).`)
-      }
-
-      const body = JSON.parse(response.body) as ProductsPage
       totalPages = body.totalPages
       for (const product of body.products) {
         if (product.isMovie || !product.isGame) continue

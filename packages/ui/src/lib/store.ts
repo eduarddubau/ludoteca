@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import {
   applyUserData, enrichLibrary, enrichWithAppId, EpicConnector, gameKey, GogConnector,
-  mergeLibrary,
+  mergeLibrary, SteamConnector,
   needsEnrichment, preserveEnrichment, reconcileImport,
   type EditableField, type EnrichProgress, type LibraryEntry, type OwnedGame, type Platform,
   type StoreConnection, type StoreConnector, type StoreId, type UserData
@@ -24,13 +24,14 @@ const connecting = ref<StoreId | null>(null)
 
 const keyOf = (game: OwnedGame): string => `${game.store}:${game.storeGameId}`
 
-/** Steam is absent deliberately: its connector is halted after an account restriction. */
 function connectorFor(platform: Platform, store: StoreId): StoreConnector {
   switch (store) {
     case 'gog':
       return new GogConnector(platform)
     case 'epic':
       return new EpicConnector(platform)
+    case 'steam':
+      return new SteamConnector(platform)
     default:
       throw new Error(`${store} has no connector yet.`)
   }
