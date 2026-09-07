@@ -1,5 +1,5 @@
 // Bump when SCHEMA changes so a shell opening an older file can tell.
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 // One row per game per store. The same title arriving from two stores stays two rows;
 // merging is a presentation concern, and a wrong merge is worse than a duplicate.
@@ -30,7 +30,18 @@ CREATE TABLE IF NOT EXISTS game (
   cover_url        TEXT,
   notes            TEXT,
   enriched_at      TEXT,
+  added_manually   INTEGER NOT NULL DEFAULT 0,
 
+  PRIMARY KEY (store, store_game_id)
+);
+
+-- User intent, kept out of \`game\` because every import truncates that table. Overrides
+-- are per-field so a refetch still updates what the user did not touch.
+CREATE TABLE IF NOT EXISTS user_data (
+  store         TEXT NOT NULL,
+  store_game_id TEXT NOT NULL,
+  overrides     TEXT NOT NULL DEFAULT '{}',
+  hidden        INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (store, store_game_id)
 );
 
@@ -42,7 +53,7 @@ CREATE TABLE IF NOT EXISTS sync_state (
 `
 
 /** Tables reconciled column-by-column against SCHEMA when a database is opened. */
-export const TABLES = ['game', 'sync_state'] as const
+export const TABLES = ['game', 'user_data', 'sync_state'] as const
 
 /**
  * Non-additive changes only — anything a column comparison cannot work out for itself,

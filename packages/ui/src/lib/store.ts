@@ -1,0 +1,182 @@
+import { computed, ref } from 'vue'
+import {
+  applyUserData, enrichLibrary, enrichWithAppId, gameKey, mergeLibrary, needsEnrichment,
+  reconcileImport,
+  type EditableField, type EnrichProgress, type LibraryEntry, type OwnedGame, type UserData
+} from '@ludoteca/core'
+import { usePlatform } from '../platform'
+import { deleteGame, insertGame, loadGames, loadUserData, replaceGames, saveUserData } from './library'
+
+// Module scope, deliberately: a component holding this would abandon the run the moment
+// the user switched tabs, which is exactly what an activity view must not do.
+const games = ref<OwnedGame[]>([])
+const progress = ref<EnrichProgress | null>(null)
+const enrichError = ref('')
+const abort = ref({ aborted: false })
+const userData = ref<Map<string, UserData>>(new Map())
+
+const keyOf = (game: OwnedGame): string => `${game.store}:${game.storeGameId}`
+
+export function useLibrary() {
+  // Overrides and hidden flags layered over synced rows, per field.
+  const applied = computed(() => applyUserData(games.value, userData.value))
+
+  const entries = computed(() => mergeLibrary(applied.value.filter((g) => !g.hidden)))
+  const hiddenEntries = computed(() => mergeLibrary(applied.value.filter((g) => g.hidden)))
+  const editedKeys = computed(
+    () => new Set(applied.value.filter((g) => g.editedFields.length).map(gameKey))
+  )
+  const untried = computed(() => games.value.filter(needsEnrichment))
+  // Looked up and still no cover: what automation could not resolve.
+  const unresolved = computed(() =>
+    games.value.filter((g) => g.enrichedAt !== undefined && g.coverUrl === undefined)
+  )
+  const resolved = computed(() => games.value.filter((g) => g.coverUrl !== undefined))
+
+  // Per-field, because a field added to enrichment after a run leaves every existing row
+  // without it — and since those rows are already marked attempted, "fetch missing"
+  // skips them. Showing the gap is what tells you a refetch is needed.
+  const coverage = computed(() => {
+    const total = games.value.length
+    const has = (pick: (g: OwnedGame) => unknown): number =>
+      games.value.filter((g) => {
+        const value = pick(g)
+        return Array.isArray(value) ? value.length > 0 : value !== undefined
+      }).length
+    return [
+      { label: 'Cover art', count: has((g) => g.coverUrl), total },
+      { label: 'Metacritic score', count: has((g) => g.criticScore), total },
+      { label: 'Genres', count: has((g) => g.genres), total },
+      { label: 'Release year', count: has((g) => g.releaseYear), total },
+      { label: 'Developer', count: has((g) => g.developer), total },
+      { label: 'Publisher', count: has((g) => g.publisher), total }
+    ]
+  })
+  const running = computed(() => progress.value !== null)
+
+  async function reload(): Promise<void> {
+    const platform = usePlatform()
+    userData.value = await loadUserData(platform)
+    games.value = await loadGames(platform)
+  }
+
+  /** Import path: manually added rows survive unless the import now carries them. */
+  async function importGames(next: OwnedGame[]): Promise<void> {
+    await replaceAll(reconcileImport(games.value, next))
+  }
+
+  function entrySources(entry: LibraryEntry): OwnedGame[] {
+    const keys = new Set(entry.sources.map((s) => `${s.store}:${s.storeGameId}`))
+    return games.value.filter((game) => keys.has(gameKey(game)))
+  }
+
+  function userEntryFor(game: OwnedGame): UserData {
+    return (
+      userData.value.get(gameKey(game)) ?? {
+        store: game.store,
+        storeGameId: game.storeGameId,
+        overrides: {},
+        hidden: false
+      }
+    )
+  }
+
+  async function writeUserData(entry: UserData): Promise<void> {
+    const platform = usePlatform()
+    await saveUserData(platform, entry)
+    userData.value = await loadUserData(platform)
+  }
+
+  /** Hiding acts on the whole entry: hiding a game the user owns twice hides both rows. */
+  async function setHidden(entry: LibraryEntry, hidden: boolean): Promise<void> {
+    for (const game of entrySources(entry)) {
+      await writeUserData({ ...userEntryFor(game), hidden })
+    }
+  }
+
+  /** Applies a whole edit in one write; per-field saving cost a full reload each time. */
+  async function setOverrides(
+    game: OwnedGame,
+    changes: Partial<Record<EditableField, unknown>>
+  ): Promise<void> {
+    const current = userEntryFor(game)
+    const overrides = { ...current.overrides }
+
+    for (const [field, value] of Object.entries(changes) as [EditableField, unknown][]) {
+      // An empty value clears the override rather than pinning a blank over synced data.
+      const empty = value === undefined || value === '' || (Array.isArray(value) && !value.length)
+      if (empty) delete overrides[field]
+      else overrides[field] = value
+    }
+
+    await writeUserData({ ...current, overrides })
+  }
+
+  async function addManual(game: OwnedGame): Promise<void> {
+    const platform = usePlatform()
+    await insertGame(platform, { ...game, addedManually: true })
+    await reload()
+  }
+
+  /** Only manual rows can truly go: an imported one would return on the next import. */
+  async function removeGame(game: OwnedGame): Promise<void> {
+    await deleteGame(usePlatform(), game)
+    await reload()
+  }
+
+  async function replaceAll(next: OwnedGame[]): Promise<void> {
+    const platform = usePlatform()
+    await replaceGames(platform, next)
+    games.value = await loadGames(platform)
+  }
+
+  function merge(subset: OwnedGame[]): OwnedGame[] {
+    const updated = new Map(subset.map((game) => [keyOf(game), game]))
+    return games.value.map((game) => updated.get(keyOf(game)) ?? game)
+  }
+
+  async function enrich(target: OwnedGame[], force: boolean): Promise<void> {
+    if (running.value) return
+    const platform = usePlatform()
+    abort.value = { aborted: false }
+    enrichError.value = ''
+    progress.value = {
+      done: 0,
+      total: force ? target.length : target.filter(needsEnrichment).length,
+      title: '',
+      matched: false
+    }
+    try {
+      const next = await enrichLibrary(platform, target, {
+        force,
+        signal: abort.value,
+        onProgress: (p) => (progress.value = p),
+        onCheckpoint: async (partial) => {
+          const merged = merge(partial)
+          await replaceGames(platform, merged)
+          games.value = merged
+        }
+      })
+      await replaceAll(merge(next))
+    } catch (err) {
+      enrichError.value = err instanceof Error ? err.message : String(err)
+      await reload()
+    } finally {
+      progress.value = null
+    }
+  }
+
+  async function applyMatch(game: OwnedGame, appId: number): Promise<void> {
+    const updated = await enrichWithAppId(usePlatform(), game, appId)
+    await replaceAll(merge([updated]))
+  }
+
+  return {
+    games, applied, entries, hiddenEntries, editedKeys,
+    untried, unresolved, resolved, coverage,
+    importGames, entrySources, setHidden, setOverrides, addManual, removeGame,
+    progress, enrichError, running,
+    stop: () => (abort.value.aborted = true),
+    reload, replaceAll, enrich, applyMatch
+  }
+}

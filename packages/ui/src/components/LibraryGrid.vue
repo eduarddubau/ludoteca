@@ -3,7 +3,11 @@ import type { LibraryEntry } from '@ludoteca/core'
 import GameTile from './GameTile.vue'
 
 defineProps<{ entries: LibraryEntry[]; needsFetch: (entry: LibraryEntry) => boolean }>()
-const emit = defineEmits<{ enrich: [entry: LibraryEntry] }>()
+const emit = defineEmits<{
+  enrich: [entry: LibraryEntry]
+  edit: [entry: LibraryEntry]
+  hide: [entry: LibraryEntry]
+}>()
 </script>
 
 <template>
@@ -14,6 +18,8 @@ const emit = defineEmits<{ enrich: [entry: LibraryEntry] }>()
       :entry="entry"
       :needs-fetch="needsFetch(entry)"
       @enrich="emit('enrich', $event)"
+      @edit="emit('edit', $event)"
+      @hide="emit('hide', $event)"
     />
   </div>
   <p v-else class="muted panel">Nothing matches those filters.</p>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { entryMetacriticLink, STATUS_LABEL, type LibraryEntry } from '@ludoteca/core'
-import { SORT_COLUMNS, type SortKey } from '../lib/sort'
+import { entryMetacriticLink, SHELF_LABEL, type LibraryEntry } from '@ludoteca/core'
+import { COLUMNS, type ColumnKey, type SortKey } from '../lib/sort'
 import ScoreChip from './ScoreChip.vue'
 import StoreLinks from './StoreLinks.vue'
 
@@ -10,10 +10,15 @@ defineProps<{
   descending: boolean
   needsFetch: (entry: LibraryEntry) => boolean
 }>()
-const emit = defineEmits<{ sort: [key: SortKey]; enrich: [entry: LibraryEntry] }>()
+const emit = defineEmits<{
+  sort: [key: SortKey]
+  enrich: [entry: LibraryEntry]
+  edit: [entry: LibraryEntry]
+  hide: [entry: LibraryEntry]
+}>()
 
 // Header and body both iterate SORT_COLUMNS, so reordering a column cannot desync them.
-function cell(entry: LibraryEntry, key: SortKey): string {
+function cell(entry: LibraryEntry, key: ColumnKey): string {
   switch (key) {
     case 'hours':
       return entry.playtimeMinutes === undefined
@@ -22,7 +27,7 @@ function cell(entry: LibraryEntry, key: SortKey): string {
     case 'releaseYear':
       return entry.releaseYear?.toString() ?? '—'
     case 'playStatus':
-      return STATUS_LABEL[entry.playStatus]
+      return SHELF_LABEL[entry.shelf]
     case 'genres':
       return entry.genres.join(', ') || '—'
     case 'developer':
@@ -41,10 +46,10 @@ function cell(entry: LibraryEntry, key: SortKey): string {
       <thead>
         <tr>
           <th
-            v-for="column in SORT_COLUMNS"
+            v-for="column in COLUMNS"
             :key="column.key"
-            :class="['sortable', `col-${column.key}`]"
-            @click="emit('sort', column.key)"
+            :class="[{ sortable: column.sortable }, `col-${column.key}`]"
+            @click="column.sortable && emit('sort', column.key as SortKey)"
           >
             {{ column.label
             }}<span class="sort">{{
@@ -56,7 +61,7 @@ function cell(entry: LibraryEntry, key: SortKey): string {
       </thead>
       <tbody>
         <tr v-for="entry in entries" :key="entry.key">
-          <td v-for="column in SORT_COLUMNS" :key="column.key" :class="`col-${column.key}`">
+          <td v-for="column in COLUMNS" :key="column.key" :class="`col-${column.key}`">
             <ScoreChip
               v-if="column.key === 'criticScore'"
               :score="entry.criticScore"
@@ -66,7 +71,7 @@ function cell(entry: LibraryEntry, key: SortKey): string {
             <StoreLinks v-else-if="column.key === 'stores'" :entry="entry" />
             <template v-else>{{ cell(entry, column.key) }}</template>
           </td>
-          <td>
+          <td class="col-actions">
             <button
               v-if="needsFetch(entry)"
               class="row-enrich"
@@ -75,6 +80,8 @@ function cell(entry: LibraryEntry, key: SortKey): string {
             >
               ↻
             </button>
+            <button class="row-enrich" title="Edit this game" @click="emit('edit', entry)">✎</button>
+            <button class="row-enrich" title="Hide or unhide" @click="emit('hide', entry)">⊘</button>
           </td>
         </tr>
       </tbody>

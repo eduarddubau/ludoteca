@@ -10,12 +10,31 @@ export interface GameSource {
 }
 
 /** One game, however many stores sell it. Built for display; the database keeps rows. */
+/**
+ * What the library is divided into. Deliberately describes the shelf rather than the
+ * playtime: 'unplayed' (a store reporting zero) and 'unknown' (Epic reporting nothing at
+ * all) are indistinguishable to a reader, and any label about *playing* would overclaim
+ * for the 319 games Epic is simply silent about. A shelf makes no such claim.
+ */
+export type Shelf = 'played' | 'backlog'
+
+export const SHELF_LABEL: Record<Shelf, string> = {
+  played: 'Played',
+  backlog: 'Backlog'
+}
+
+export function shelfOf(status: PlayStatus): Shelf {
+  return status === 'played' ? 'played' : 'backlog'
+}
+
 export interface LibraryEntry {
   key: string
   title: string
   stores: StoreId[]
   sources: GameSource[]
+  /** Kept alongside `shelf` so the finer distinction stays recoverable. */
   playStatus: PlayStatus
+  shelf: Shelf
   playtimeMinutes?: number
   genres: string[]
   releaseYear?: number
@@ -78,6 +97,7 @@ export function mergeLibrary(games: OwnedGame[]): LibraryEntry[] {
       stores: [...new Set(sources.map((s) => s.store))].sort(),
       sources,
       playStatus: mergeStatus(sources),
+      shelf: shelfOf(mergeStatus(sources)),
       // Hours on the same game across two stores are still hours on that game.
       playtimeMinutes: played.length ? played.reduce((a, b) => a + b, 0) : undefined,
       genres: group.find((game) => game.genres.length)?.genres ?? [],

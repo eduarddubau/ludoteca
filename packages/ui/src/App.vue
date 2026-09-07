@@ -1,367 +1,43 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import {
-  enrichGame, enrichLibrary, fromJson, mergeLibrary, needsEnrichment, parseCsv,
-  sampleLibrary, STATUS_LABEL, suggestMapping, toCsv, toJson,
-  type ColumnMapping, type EnrichProgress, type LibraryEntry, type OwnedGame,
-  type ParsedCsv, type PlayStatus, type StoreId
-} from '@ludoteca/core'
-import { usePlatform } from './platform'
-import { loadGames, replaceGames } from './lib/library'
-import { sortEntries, type SortKey } from './lib/sort'
-import LibraryTable from './components/LibraryTable.vue'
-import LibraryGrid from './components/LibraryGrid.vue'
-import MappingPanel from './components/MappingPanel.vue'
+import { useLibrary } from './lib/store'
+import LibraryView from './LibraryView.vue'
+import MetadataView from './MetadataView.vue'
 
-const shell = ref('—')
-const games = ref<OwnedGame[]>([])
-const search = ref('')
-const stores = ref<Set<StoreId>>(new Set())
-const statuses = ref<Set<PlayStatus>>(new Set())
-const genres = ref<Set<string>>(new Set())
-const genreMenu = ref(false)
-// Import opens the file picker straight away; the mapping step appears only when a CSV
-// actually needs it, so choosing a file is one click rather than two.
-const fileInput = ref<HTMLInputElement | null>(null)
-const pendingCsv = ref<{ parsed: ParsedCsv; suggested: ColumnMapping } | null>(null)
-const importError = ref('')
-const exportMenu = ref(false)
+const library = useLibrary()
+const tab = ref<'library' | 'metadata'>('library')
 
-// Grid is the pleasant default; at 500+ games the list is the one that gets used.
-const view = ref<'grid' | 'list'>('grid')
-// Highest-rated first is the useful opening view of a 500-game library.
-const sortKey = ref<SortKey>('criticScore')
-const descending = ref(true)
+onMounted(library.reload)
 
-const progress = ref<EnrichProgress | null>(null)
-const abort = ref({ aborted: false })
-const enrichError = ref('')
-
-
-onMounted(async () => {
-  const platform = usePlatform()
-  shell.value = platform.name
-  games.value = await loadGames(platform)
+// A run started on one tab keeps going on the other, so its progress has to be visible
+// from anywhere — otherwise leaving the tab feels like cancelling it.
+const runLabel = computed(() => {
+  const progress = library.progress.value
+  return progress ? `${progress.done} / ${progress.total}` : null
 })
-
-// Rows stay per-store in the database; the same game on two stores collapses to one
-// entry here, so nothing about ownership is lost by displaying it once.
-const entries = computed(() => mergeLibrary(games.value))
-
-// Ordered by how many games carry each, so the useful ones are not buried under the
-// one-offs Steam attaches to a handful of titles.
-const genreOptions = computed(() => {
-  const counts = new Map<string, number>()
-  for (const entry of entries.value) {
-    for (const genre of entry.genres) counts.set(genre, (counts.get(genre) ?? 0) + 1)
-  }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])
-})
-
-const storeOptions = computed(() => [...new Set(games.value.map((g) => g.store))].sort())
-const statusOptions = computed(() =>
-  [...new Set(entries.value.map((e) => e.playStatus))].sort()
-)
-
-const visible = computed(() => {
-  const needle = search.value.trim().toLowerCase()
-  const filtered = entries.value.filter(
-    (entry) =>
-      // A store filter matches if the game is owned there at all.
-      (stores.value.size === 0 || entry.stores.some((s) => stores.value.has(s))) &&
-      (statuses.value.size === 0 || statuses.value.has(entry.playStatus)) &&
-      // Any selected genre matches, which is what "show me RPGs and strategy" means.
-      (genres.value.size === 0 || entry.genres.some((g) => genres.value.has(g))) &&
-      (!needle || entry.title.toLowerCase().includes(needle))
-  )
-  return sortEntries(filtered, sortKey.value, descending.value)
-})
-
-/** The database rows behind what is on screen — enrichment and export work on these. */
-const visibleGames = computed(() => {
-  const wanted = new Set(
-    visible.value.flatMap((entry) => entry.sources.map((s) => `${s.store}:${s.storeGameId}`))
-  )
-  return games.value.filter((game) => wanted.has(`${game.store}:${game.storeGameId}`))
-})
-
-// An entry still needs fetching while any of its store rows has never been attempted.
-const entryNeedsFetch = (entry: LibraryEntry): boolean => entry.enrichedAt === undefined
-
-const pending = computed(() => visibleGames.value.filter(needsEnrichment).length)
-
-const totalHours = computed(() =>
-  Math.round(visible.value.reduce((sum, e) => sum + (e.playtimeMinutes ?? 0), 0) / 60)
-)
-
-function toggled<T>(set: Set<T>, value: T): Set<T> {
-  const next = new Set(set)
-  if (next.has(value)) next.delete(value)
-  else next.add(value)
-  return next
-}
-
-function onSort(key: SortKey): void {
-  if (sortKey.value === key) descending.value = !descending.value
-  else {
-    sortKey.value = key
-    descending.value = false
-  }
-}
-
-const keyOf = (game: OwnedGame): string => `${game.store}:${game.storeGameId}`
-
-/** Folds a subset back into the full library, since only part of it may have been run. */
-function mergeIntoLibrary(subset: OwnedGame[]): OwnedGame[] {
-  const updated = new Map(subset.map((game) => [keyOf(game), game]))
-  return games.value.map((game) => updated.get(keyOf(game)) ?? game)
-}
-
-/**
- * Two Steam requests per game, paced to stay under the rate limit, so a full library
- * takes minutes. `force` re-fetches games already attempted; without it only games never
- * tried are visited. Either way it can be stopped, and progress is checkpointed.
- */
-async function enrich(force: boolean): Promise<void> {
-  const platform = usePlatform()
-  const target = visibleGames.value
-  abort.value = { aborted: false }
-  enrichError.value = ''
-  progress.value = { done: 0, total: force ? target.length : pending.value, title: '', matched: false }
-  try {
-    const next = await enrichLibrary(platform, target, {
-      force,
-      signal: abort.value,
-      onProgress: (p) => (progress.value = p),
-      // A full run takes minutes; write periodically so a crash costs a batch, not all of it.
-      onCheckpoint: (partial) => replaceGames(platform, mergeIntoLibrary(partial))
-    })
-    await persist(mergeIntoLibrary(next))
-  } catch (err) {
-    // Whatever went wrong, say so — a run that just stops tells the user nothing.
-    enrichError.value = err instanceof Error ? err.message : String(err)
-    games.value = await loadGames(platform)
-  } finally {
-    progress.value = null
-  }
-}
-
-// Single-entry path: enriches every store row behind it, for a game added after a run.
-async function enrichOne(entry: LibraryEntry): Promise<void> {
-  const platform = usePlatform()
-  const keys = new Set(entry.sources.map((s) => `${s.store}:${s.storeGameId}`))
-  const updated = await Promise.all(
-    games.value.filter((g) => keys.has(keyOf(g))).map((g) => enrichGame(platform, g))
-  )
-  await persist(mergeIntoLibrary(updated))
-}
-
-// A Blob download works in any shell's webview, so export needs no Platform capability —
-// the same reasoning as import using the File API.
-function download(filename: string, contents: string, mime: string): void {
-  const url = URL.createObjectURL(new Blob([contents], { type: mime }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  URL.revokeObjectURL(url)
-}
-
-// Exports what is on screen, not the whole library — the button carries the count so
-// that is visible rather than surprising.
-function exportAs(format: 'csv' | 'json'): void {
-  exportMenu.value = false
-  const stamp = new Date().toISOString().slice(0, 10)
-  if (format === 'csv') {
-    download(`ludoteca-${stamp}.csv`, toCsv(visibleGames.value), 'text/csv;charset=utf-8')
-  } else {
-    download(`ludoteca-${stamp}.json`, toJson(visibleGames.value), 'application/json')
-  }
-}
-
-async function onFileChosen(event: Event): Promise<void> {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-
-  importError.value = ''
-  try {
-    const text = await file.text()
-    // JSON is already this project's shape, so it needs no mapping step.
-    if (file.name.toLowerCase().endsWith('.json') || text.trimStart().startsWith('[')) {
-      await persist(fromJson(text))
-      return
-    }
-    const parsed = parseCsv(text)
-    if (!parsed.rows.length) throw new Error('No rows found in that file.')
-    pendingCsv.value = { parsed, suggested: suggestMapping(parsed.headers) }
-  } catch (err) {
-    importError.value = err instanceof Error ? err.message : String(err)
-  }
-}
-
-async function persist(next: OwnedGame[]): Promise<void> {
-  const platform = usePlatform()
-  await replaceGames(platform, next)
-  games.value = await loadGames(platform)
-  pendingCsv.value = null
-}
 </script>
 
 <template>
   <div class="app">
-    <header>
+    <header class="app-head">
       <h1>Ludoteca</h1>
-      <p class="muted">
-        {{ visible.length }} of {{ entries.length }} games · {{ games.length }} store entries ·
-        {{ totalHours }}h · {{ shell }} shell
-      </p>
+
+      <nav class="tabs">
+        <button :class="{ on: tab === 'library' }" @click="tab = 'library'">Library</button>
+        <button :class="{ on: tab === 'metadata' }" @click="tab = 'metadata'">
+          Metadata
+          <span v-if="library.unresolved.value.length" class="badge">
+            {{ library.unresolved.value.length }}
+          </span>
+        </button>
+      </nav>
+
+      <span v-if="runLabel" class="running" title="Metadata fetch in progress">
+        Fetching {{ runLabel }}
+      </span>
     </header>
 
-    <div class="toolbar">
-      <input v-model="search" type="search" placeholder="Search titles…" />
-
-      <div class="group">
-        <div class="segmented">
-          <button :class="{ on: view === 'grid' }" @click="view = 'grid'">Grid</button>
-          <button :class="{ on: view === 'list' }" @click="view = 'list'">List</button>
-        </div>
-      </div>
-
-      <div class="group">
-        <button @click="fileInput?.click()">Import…</button>
-
-        <div class="menu-anchor">
-          <button :disabled="!visible.length" @click="exportMenu = !exportMenu">
-            Export… ({{ visible.length }})
-          </button>
-          <div v-if="exportMenu" class="menu-backdrop" @click="exportMenu = false" />
-          <div v-if="exportMenu" class="menu">
-            <button @click="exportAs('csv')">CSV</button>
-            <button @click="exportAs('json')">JSON</button>
-          </div>
-        </div>
-
-        <button v-if="!games.length" @click="persist(sampleLibrary())">Sample data</button>
-      </div>
-
-      <div v-if="games.length" class="group">
-        <button v-if="pending && !progress" @click="enrich(false)">
-          Fetch metadata ({{ pending }})
-        </button>
-        <button
-          v-if="!progress"
-          title="Re-fetch every visible game, including ones already looked up"
-          @click="enrich(true)"
-        >
-          Refetch all ({{ visible.length }})
-        </button>
-        <button v-if="progress" @click="abort.aborted = true">Stop</button>
-      </div>
-    </div>
-
-    <input
-      ref="fileInput"
-      type="file"
-      accept=".csv,.json,text/csv,application/json"
-      hidden
-      @change="onFileChosen"
-    />
-
-    <p v-if="importError" class="panel error">{{ importError }}</p>
-
-    <MappingPanel
-      v-if="pendingCsv"
-      :parsed="pendingCsv.parsed"
-      :suggested="pendingCsv.suggested"
-      @confirm="persist"
-      @cancel="pendingCsv = null"
-    />
-
-    <p v-if="progress" class="muted panel">
-      Enriching {{ progress.done }} / {{ progress.total }} — {{ progress.title }}
-    </p>
-    <p v-if="enrichError" class="panel error">
-      Enrichment stopped: {{ enrichError }}
-      <br /><span class="muted">Anything already fetched was saved — press Fetch metadata to resume.</span>
-    </p>
-
-
-    <div v-if="games.length" class="filters">
-      <span class="muted">Store</span>
-      <button
-        v-for="store in storeOptions"
-        :key="store"
-        :class="{ on: stores.has(store) }"
-        @click="stores = toggled(stores, store)"
-      >
-        {{ store }}
-      </button>
-
-      <span class="muted spacer">Status</span>
-      <button
-        v-for="status in statusOptions"
-        :key="status"
-        :class="{ on: statuses.has(status) }"
-        @click="statuses = toggled(statuses, status)"
-      >
-        {{ STATUS_LABEL[status] }}
-      </button>
-
-      <span class="muted spacer">Genre</span>
-      <div class="menu-anchor">
-        <button :class="{ on: genres.size > 0 }" @click="genreMenu = !genreMenu">
-          {{ genres.size ? `${genres.size} selected` : 'Any' }}
-        </button>
-        <div v-if="genreMenu" class="menu-backdrop" @click="genreMenu = false" />
-        <div v-if="genreMenu" class="menu menu-scroll">
-          <button v-if="genres.size" class="menu-clear" @click="genres = new Set()">
-            Clear selection
-          </button>
-          <button
-            v-for="[genre, count] in genreOptions"
-            :key="genre"
-            :class="{ on: genres.has(genre) }"
-            @click="genres = toggled(genres, genre)"
-          >
-            {{ genre }} <span class="muted">{{ count }}</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- The grid has no column headers, so it needs its own sort control. -->
-      <template v-if="view === 'grid'">
-        <span class="muted spacer">Sort</span>
-        <select v-model="sortKey">
-          <option value="criticScore">Score</option>
-          <option value="title">Title</option>
-          <option value="developer">Developer</option>
-          <option value="hours">Hours</option>
-          <option value="releaseYear">Year</option>
-          <option value="store">Store</option>
-        </select>
-        <button @click="descending = !descending">{{ descending ? '▼' : '▲' }}</button>
-      </template>
-    </div>
-
-    <p v-if="!games.length" class="muted panel">
-      No games yet. Import a CSV, or load the sample data to see the layout.
-    </p>
-    <LibraryGrid
-      v-else-if="view === 'grid'"
-      :entries="visible"
-      :needs-fetch="entryNeedsFetch"
-      @enrich="enrichOne"
-    />
-    <LibraryTable
-      v-else
-      :entries="visible"
-      :sort-key="sortKey"
-      :descending="descending"
-      :needs-fetch="entryNeedsFetch"
-      @sort="onSort"
-      @enrich="enrichOne"
-    />
+    <LibraryView v-if="tab === 'library'" />
+    <MetadataView v-else />
   </div>
 </template>

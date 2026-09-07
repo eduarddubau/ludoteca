@@ -1,4 +1,7 @@
-export type StoreId = 'steam' | 'gog' | 'epic'
+/** 'other' covers stores with no integration — itch, Amazon, a physical key, anything. */
+export type StoreId = 'steam' | 'gog' | 'epic' | 'other'
+
+export const STORE_IDS: StoreId[] = ['steam', 'gog', 'epic', 'other']
 
 /** Family-shared titles are playable but not owned, and only one member at a time. */
 export type Ownership =
@@ -32,6 +35,8 @@ export interface OwnedGame {
   notes?: string
   /** ISO timestamp of the last enrichment attempt, set whether or not it matched. */
   enrichedAt?: string
+  /** Entered by hand rather than imported, so an import must not delete it. */
+  addedManually?: boolean
 }
 
 export interface StoreConnector {

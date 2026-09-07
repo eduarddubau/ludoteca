@@ -6,7 +6,10 @@ import type { GameSource, LibraryEntry } from './library/merge.js'
 const SEARCH: Record<StoreId, (title: string) => string> = {
   steam: (t) => `https://store.steampowered.com/search/?term=${encodeURIComponent(t)}`,
   gog: (t) => `https://www.gog.com/en/games?query=${encodeURIComponent(t)}`,
-  epic: (t) => `https://store.epicgames.com/en-US/browse?q=${encodeURIComponent(t)}`
+  epic: (t) => `https://store.epicgames.com/en-US/browse?q=${encodeURIComponent(t)}`,
+  // No store to search, so fall back to the open web. Enrichment usually replaces this
+  // with a real Steam page anyway, since Steam carries most of what 'other' covers.
+  other: (t) => `https://duckduckgo.com/?q=${encodeURIComponent(`${t} game`)}`
 }
 
 export interface GameLink {

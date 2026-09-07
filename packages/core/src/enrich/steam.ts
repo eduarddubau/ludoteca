@@ -29,6 +29,15 @@ interface SearchHit {
   name: string
 }
 
+/** A Steam result offered to the user when auto-matching cannot decide. */
+export interface MatchCandidate {
+  appId: number
+  name: string
+  coverUrl: string
+  /** True when the name matches exactly — what auto-matching would have accepted. */
+  exact: boolean
+}
+
 const normalize = (s: string): string =>
   s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
@@ -94,10 +103,34 @@ const EDITION_SUFFIX =
  * outrank originals, so "Hades" returns Hades II first and "Subnautica" returns
  * Subnautica 2. Checking only index 0 rejected three of four popular titles.
  */
-async function findAppId(platform: Platform, title: string): Promise<SearchHit | null> {
-  const url = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(title)}&cc=us&l=en`
+async function search(platform: Platform, term: string): Promise<SearchHit[]> {
+  const url = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(term)}&cc=us&l=en`
   const result = await json<{ items?: SearchHit[] }>(platform, url)
-  const items = result?.items ?? []
+  return result?.items ?? []
+}
+
+/**
+ * The part before a subtitle separator. Steam's search returns nothing at all for
+ * "Alba - A Wildlife Adventure" because its own title uses a colon, yet searching "Alba"
+ * finds it — and the two normalize identically, so the match is then exact. Punctuation
+ * in a subtitle was a large share of the unmatched games.
+ */
+export function shortenTitle(title: string): string | null {
+  const cut = title.search(/\s*[-–—:]\s+/)
+  if (cut <= 0) return null
+  const head = title.slice(0, cut).trim()
+  return head.length >= 3 ? head : null
+}
+
+async function findAppId(platform: Platform, title: string): Promise<SearchHit | null> {
+  let items = await search(platform, title)
+
+  // Retry on the leading phrase when the full title finds nothing at all.
+  if (!items.length) {
+    const shorter = shortenTitle(title)
+    if (shorter) items = await search(platform, shorter)
+  }
+
   const wanted = normalize(title)
 
   const exact = items.find((item) => normalize(item.name) === wanted)
@@ -143,6 +176,49 @@ export function needsEnrichment(game: OwnedGame): boolean {
 }
 
 /**
+ * The top Steam results for a title, for the cases auto-matching refuses. Ranked as
+ * Steam ranks them — sequels first for "Hades" — so the exact flag marks which one the
+ * automatic path would have taken, and the user decides the rest.
+ */
+export async function searchCandidates(
+  platform: Platform,
+  title: string,
+  limit = 8
+): Promise<MatchCandidate[]> {
+  const url = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(title)}&cc=us&l=en`
+  const result = await json<{ items?: SearchHit[] }>(platform, url)
+  const wanted = normalize(title)
+
+  return (result?.items ?? []).slice(0, limit).map((item) => ({
+    appId: item.id,
+    name: item.name,
+    coverUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.id}/library_600x900.jpg`,
+    exact: normalize(item.name) === wanted
+  }))
+}
+
+/** Applies a specific Steam app to a game — the manual counterpart to enrichGame. */
+export async function enrichWithAppId(
+  platform: Platform,
+  game: OwnedGame,
+  appId: number
+): Promise<OwnedGame> {
+  const details = await fetchDetails(platform, appId)
+  return {
+    ...game,
+    criticScore: details?.metacritic?.score ?? game.criticScore,
+    metacriticUrl: details?.metacritic?.url ?? game.metacriticUrl,
+    coverUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`,
+    genres: details?.genres?.map((g) => g.description) ?? game.genres,
+    developer: details?.developers?.[0] ?? game.developer,
+    publisher: details?.publishers?.[0] ?? game.publisher,
+    releaseYear: releaseYear(details?.release_date?.date) ?? game.releaseYear,
+    storeUrl: `https://store.steampowered.com/app/${appId}`,
+    enrichedAt: new Date().toISOString()
+  }
+}
+
+/**
  * Enriches one game from Steam's public store endpoints — no API key. Call this
  * directly when a single game is added; `enrichLibrary` is the batch built on it.
  *
@@ -151,25 +227,11 @@ export function needsEnrichment(game: OwnedGame): boolean {
  * `storeUrl` stays store-specific.
  */
 export async function enrichGame(platform: Platform, game: OwnedGame): Promise<OwnedGame> {
-  const attemptedAt = new Date().toISOString()
   const hit = await findAppId(platform, game.title)
-  if (!hit) return { ...game, enrichedAt: attemptedAt }
-
-  const details = await fetchDetails(platform, hit.id)
-  return {
-    ...game,
-    criticScore: details?.metacritic?.score ?? game.criticScore,
-    metacriticUrl: details?.metacritic?.url ?? game.metacriticUrl,
-    coverUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${hit.id}/library_600x900.jpg`,
-    genres: details?.genres?.map((g) => g.description) ?? game.genres,
-    developer: details?.developers?.[0] ?? game.developer,
-    publisher: details?.publishers?.[0] ?? game.publisher,
-    releaseYear: releaseYear(details?.release_date?.date) ?? game.releaseYear,
-    // Steam's page is used regardless of where the game was bought: Epic exclusives are
-    // rare, and a real store page beats a search link. `store` still records ownership.
-    storeUrl: `https://store.steampowered.com/app/${hit.id}`,
-    enrichedAt: attemptedAt
-  }
+  // Marked attempted even with no match, so it is not re-tried on every run — and so the
+  // manual picker can list exactly the games automation could not resolve.
+  if (!hit) return { ...game, enrichedAt: new Date().toISOString() }
+  return enrichWithAppId(platform, game, hit.id)
 }
 
 /** Enriches every game that has not been attempted yet, paced and interruptible. */

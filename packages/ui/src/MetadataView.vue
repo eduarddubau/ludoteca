@@ -1,0 +1,113 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import type { OwnedGame } from '@ludoteca/core'
+import { useLibrary } from './lib/store'
+import MatchPicker from './components/MatchPicker.vue'
+
+const library = useLibrary()
+const picking = ref<OwnedGame | null>(null)
+
+const percent = computed(() =>
+  library.games.value.length
+    ? Math.round((library.resolved.value.length / library.games.value.length) * 100)
+    : 0
+)
+
+async function applyPick(appId: number): Promise<void> {
+  const target = picking.value
+  if (!target) return
+  await library.applyMatch(target, appId)
+  picking.value = null
+}
+</script>
+
+<template>
+  <div>
+    <p class="muted count">
+      {{ library.resolved.value.length }} resolved ·
+      {{ library.unresolved.value.length }} need a manual match ·
+      {{ library.untried.value.length }} not yet looked up
+    </p>
+
+    <!-- One line that always says where the run is, whether or not it is running. -->
+    <div class="statusbar">
+      <div class="bar">
+        <div class="bar-fill" :style="{ width: `${percent}%` }" />
+      </div>
+      <span class="bar-label muted">
+        <template v-if="library.progress.value">
+          {{ library.progress.value.done }} / {{ library.progress.value.total }} —
+          {{ library.progress.value.title }}
+        </template>
+        <template v-else>{{ percent }}% of {{ library.games.value.length }} have metadata</template>
+      </span>
+
+      <button
+        v-if="library.untried.value.length && !library.running.value"
+        @click="library.enrich(library.games.value, false)"
+      >
+        Fetch missing ({{ library.untried.value.length }})
+      </button>
+      <button v-if="!library.running.value" @click="library.enrich(library.games.value, true)">
+        Refetch all ({{ library.games.value.length }})
+      </button>
+      <button v-if="library.running.value" @click="library.stop()">Stop</button>
+    </div>
+
+    <p v-if="library.enrichError.value" class="panel error">{{ library.enrichError.value }}</p>
+
+    <div v-if="library.games.value.length" class="coverage">
+      <div v-for="field in library.coverage.value" :key="field.label" class="coverage-row">
+        <span class="coverage-label">{{ field.label }}</span>
+        <div class="bar">
+          <div
+            class="bar-fill"
+            :style="{ width: `${field.total ? (field.count / field.total) * 100 : 0}%` }"
+          />
+        </div>
+        <span class="muted coverage-count">{{ field.count }} / {{ field.total }}</span>
+      </div>
+      <p class="muted coverage-hint">
+        A field added after a run leaves earlier rows without it. Those rows already count
+        as looked up, so <strong>Refetch all</strong> is what backfills them —
+        <em>Fetch missing</em> will skip them.
+      </p>
+    </div>
+
+    <div v-if="picking" class="panel">
+      <p>
+        <strong>{{ picking.title }}</strong>
+        <span class="muted"> — pick the right game, or skip it</span>
+      </p>
+      <MatchPicker :game="picking" @pick="applyPick" @skip="picking = null" />
+    </div>
+
+    <h2 v-if="library.unresolved.value.length" class="section">
+      Needs a manual match ({{ library.unresolved.value.length }})
+    </h2>
+    <p v-if="library.unresolved.value.length" class="muted">
+      Steam had no confident match for these, so they were left alone rather than guessed at.
+    </p>
+
+    <div v-if="library.unresolved.value.length" class="table-wrap">
+      <table>
+        <tbody>
+          <tr v-for="game in library.unresolved.value" :key="`${game.store}:${game.storeGameId}`">
+            <td>{{ game.title }}</td>
+            <td class="cap col-stores">{{ game.store }}</td>
+            <td class="col-hours">
+              <button @click="picking = game">Find match…</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p v-else-if="!library.untried.value.length && library.games.value.length" class="muted panel">
+      Everything has been looked up, and nothing needs resolving by hand.
+    </p>
+    <p v-else-if="!library.games.value.length" class="muted panel">
+      Import a library first — there is nothing to fetch metadata for yet.
+    </p>
+  </div>
+</template>
