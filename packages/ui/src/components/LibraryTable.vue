@@ -23,6 +23,12 @@ function cell(entry: LibraryEntry, key: SortKey): string {
       return entry.releaseYear?.toString() ?? '—'
     case 'playStatus':
       return STATUS_LABEL[entry.playStatus]
+    case 'genres':
+      return entry.genres.join(', ') || '—'
+    case 'developer':
+      return entry.developer ?? '—'
+    case 'publisher':
+      return entry.publisher ?? '—'
     default:
       return entry.title
   }

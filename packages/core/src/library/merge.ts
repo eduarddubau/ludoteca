@@ -19,6 +19,8 @@ export interface LibraryEntry {
   playtimeMinutes?: number
   genres: string[]
   releaseYear?: number
+  developer?: string
+  publisher?: string
   criticScore?: number
   metacriticUrl?: string
   coverUrl?: string
@@ -80,6 +82,8 @@ export function mergeLibrary(games: OwnedGame[]): LibraryEntry[] {
       playtimeMinutes: played.length ? played.reduce((a, b) => a + b, 0) : undefined,
       genres: group.find((game) => game.genres.length)?.genres ?? [],
       releaseYear: first((game) => game.releaseYear),
+      developer: first((game) => game.developer),
+      publisher: first((game) => game.publisher),
       criticScore: first((game) => game.criticScore),
       metacriticUrl: first((game) => game.metacriticUrl),
       coverUrl: first((game) => game.coverUrl),

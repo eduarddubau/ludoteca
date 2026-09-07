@@ -1,6 +1,15 @@
 import type { LibraryEntry } from '@ludoteca/core'
 
-export type SortKey = 'criticScore' | 'title' | 'stores' | 'playStatus' | 'hours' | 'releaseYear'
+export type SortKey =
+  | 'criticScore'
+  | 'title'
+  | 'stores'
+  | 'playStatus'
+  | 'hours'
+  | 'genres'
+  | 'developer'
+  | 'publisher'
+  | 'releaseYear'
 
 export const SORT_COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'criticScore', label: 'Score' },
@@ -8,10 +17,14 @@ export const SORT_COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'stores', label: 'Stores' },
   { key: 'playStatus', label: 'Status' },
   { key: 'hours', label: 'Hours' },
+  { key: 'genres', label: 'Genres' },
+  { key: 'developer', label: 'Developer' },
+  { key: 'publisher', label: 'Publisher' },
   { key: 'releaseYear', label: 'Year' }
 ]
 
-// Missing values sink to the bottom in both directions — an absent score is not a zero.
+// Missing values sink to the bottom in both directions — an absent score is not a zero,
+// and an unknown developer should not sort among the As.
 function rank(entry: LibraryEntry, key: SortKey): number | string {
   switch (key) {
     case 'hours':
@@ -22,8 +35,14 @@ function rank(entry: LibraryEntry, key: SortKey): number | string {
       return entry.releaseYear ?? -1
     case 'stores':
       return entry.stores.join('+')
+    case 'genres':
+      return entry.genres.join(', ') || '￿'
+    case 'developer':
+      return entry.developer ?? '￿'
+    case 'publisher':
+      return entry.publisher ?? '￿'
     default:
-      return String(entry[key])
+      return entry.title
   }
 }
 

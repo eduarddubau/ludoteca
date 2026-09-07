@@ -119,6 +119,8 @@ interface AppDetails {
     name: string
     metacritic?: { score: number; url: string }
     genres?: { description: string }[]
+    developers?: string[]
+    publishers?: string[]
     release_date?: { date: string }
   }
 }
@@ -160,6 +162,8 @@ export async function enrichGame(platform: Platform, game: OwnedGame): Promise<O
     metacriticUrl: details?.metacritic?.url ?? game.metacriticUrl,
     coverUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${hit.id}/library_600x900.jpg`,
     genres: details?.genres?.map((g) => g.description) ?? game.genres,
+    developer: details?.developers?.[0] ?? game.developer,
+    publisher: details?.publishers?.[0] ?? game.publisher,
     releaseYear: releaseYear(details?.release_date?.date) ?? game.releaseYear,
     // Steam's page is used regardless of where the game was bought: Epic exclusives are
     // rare, and a real store page beats a search link. `store` still records ownership.

@@ -18,6 +18,8 @@ const games = ref<OwnedGame[]>([])
 const search = ref('')
 const stores = ref<Set<StoreId>>(new Set())
 const statuses = ref<Set<PlayStatus>>(new Set())
+const genres = ref<Set<string>>(new Set())
+const genreMenu = ref(false)
 // Import opens the file picker straight away; the mapping step appears only when a CSV
 // actually needs it, so choosing a file is one click rather than two.
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -46,6 +48,16 @@ onMounted(async () => {
 // entry here, so nothing about ownership is lost by displaying it once.
 const entries = computed(() => mergeLibrary(games.value))
 
+// Ordered by how many games carry each, so the useful ones are not buried under the
+// one-offs Steam attaches to a handful of titles.
+const genreOptions = computed(() => {
+  const counts = new Map<string, number>()
+  for (const entry of entries.value) {
+    for (const genre of entry.genres) counts.set(genre, (counts.get(genre) ?? 0) + 1)
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])
+})
+
 const storeOptions = computed(() => [...new Set(games.value.map((g) => g.store))].sort())
 const statusOptions = computed(() =>
   [...new Set(entries.value.map((e) => e.playStatus))].sort()
@@ -58,6 +70,8 @@ const visible = computed(() => {
       // A store filter matches if the game is owned there at all.
       (stores.value.size === 0 || entry.stores.some((s) => stores.value.has(s))) &&
       (statuses.value.size === 0 || statuses.value.has(entry.playStatus)) &&
+      // Any selected genre matches, which is what "show me RPGs and strategy" means.
+      (genres.value.size === 0 || entry.genres.some((g) => genres.value.has(g))) &&
       (!needle || entry.title.toLowerCase().includes(needle))
   )
   return sortEntries(filtered, sortKey.value, descending.value)
@@ -295,12 +309,34 @@ async function persist(next: OwnedGame[]): Promise<void> {
         {{ STATUS_LABEL[status] }}
       </button>
 
+      <span class="muted spacer">Genre</span>
+      <div class="menu-anchor">
+        <button :class="{ on: genres.size > 0 }" @click="genreMenu = !genreMenu">
+          {{ genres.size ? `${genres.size} selected` : 'Any' }}
+        </button>
+        <div v-if="genreMenu" class="menu-backdrop" @click="genreMenu = false" />
+        <div v-if="genreMenu" class="menu menu-scroll">
+          <button v-if="genres.size" class="menu-clear" @click="genres = new Set()">
+            Clear selection
+          </button>
+          <button
+            v-for="[genre, count] in genreOptions"
+            :key="genre"
+            :class="{ on: genres.has(genre) }"
+            @click="genres = toggled(genres, genre)"
+          >
+            {{ genre }} <span class="muted">{{ count }}</span>
+          </button>
+        </div>
+      </div>
+
       <!-- The grid has no column headers, so it needs its own sort control. -->
       <template v-if="view === 'grid'">
         <span class="muted spacer">Sort</span>
         <select v-model="sortKey">
           <option value="criticScore">Score</option>
           <option value="title">Title</option>
+          <option value="developer">Developer</option>
           <option value="hours">Hours</option>
           <option value="releaseYear">Year</option>
           <option value="store">Store</option>

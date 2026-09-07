@@ -315,3 +315,12 @@ td.col-hours, td.col-releaseYear { text-align: right; }
 .scrim .store-link { background: rgba(16, 19, 26, 0.8); }
 
 .col-stores { width: 1%; white-space: nowrap; }
+
+/* Genre list can run to a dozen-plus entries, so the menu scrolls rather than growing. */
+.menu-scroll { max-height: 320px; overflow-y: auto; min-width: 200px; }
+.menu button { display: flex; justify-content: space-between; gap: 12px; }
+.menu button.on { color: var(--accent); }
+.menu-clear { border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+
+.col-genres { min-width: 160px; white-space: normal; }
+.col-developer, .col-publisher { min-width: 120px; }
