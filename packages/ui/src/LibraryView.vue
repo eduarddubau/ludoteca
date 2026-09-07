@@ -314,6 +314,10 @@ async function enrichOne(entry: LibraryEntry): Promise<void> {
         @clear="publishers = new Set()"
       />
 
+      <span class="muted spacer">Hidden</span>
+      <button :class="{ on: showHidden }" @click="showHidden = !showHidden">
+        Show hidden ({{ library.hiddenEntries.value.length }})
+      </button>
     </div>
 
     <div v-if="library.games.value.length" class="filters">
