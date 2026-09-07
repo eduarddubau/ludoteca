@@ -5,10 +5,11 @@ export type {
 export type { StoreId, Ownership, OwnedGame, PlayStatus, StoreConnector } from './connectors/types.js'
 export { STORE_IDS } from './connectors/types.js'
 export {
-  applyUserData, reconcileImport, gameKey, EDITABLE_FIELDS,
+  applyUserData, reconcileImport, preserveEnrichment, gameKey, EDITABLE_FIELDS,
   type UserData, type EditableField
 } from './library/userdata.js'
 export { GogConnector } from './connectors/gog.js'
+export { EpicConnector } from './connectors/epic.js'
 export { SCHEMA, SCHEMA_VERSION, MIGRATIONS, TABLES } from './db/schema.js'
 export {
   parseCsv, suggestMapping, toOwnedGames, EMPTY_MAPPING,

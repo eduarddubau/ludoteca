@@ -1,9 +1,10 @@
 import { computed, ref } from 'vue'
 import {
-  applyUserData, enrichLibrary, enrichWithAppId, gameKey, GogConnector, mergeLibrary,
-  needsEnrichment, reconcileImport,
-  type EditableField, type EnrichProgress, type LibraryEntry, type OwnedGame,
-  type StoreConnection, type StoreId, type UserData
+  applyUserData, enrichLibrary, enrichWithAppId, EpicConnector, gameKey, GogConnector,
+  mergeLibrary,
+  needsEnrichment, preserveEnrichment, reconcileImport,
+  type EditableField, type EnrichProgress, type LibraryEntry, type OwnedGame, type Platform,
+  type StoreConnection, type StoreConnector, type StoreId, type UserData
 } from '@ludoteca/core'
 import { usePlatform } from '../platform'
 import {
@@ -22,6 +23,18 @@ const connections = ref<Map<string, StoreConnection>>(new Map())
 const connecting = ref<StoreId | null>(null)
 
 const keyOf = (game: OwnedGame): string => `${game.store}:${game.storeGameId}`
+
+/** Steam is absent deliberately: its connector is halted after an account restriction. */
+function connectorFor(platform: Platform, store: StoreId): StoreConnector {
+  switch (store) {
+    case 'gog':
+      return new GogConnector(platform)
+    case 'epic':
+      return new EpicConnector(platform)
+    default:
+      throw new Error(`${store} has no connector yet.`)
+  }
+}
 
 export function useLibrary() {
   // Overrides and hidden flags layered over synced rows, per field.
@@ -76,9 +89,46 @@ export function useLibrary() {
     const platform = usePlatform()
     connecting.value = store
     try {
-      if (store !== 'gog') throw new Error(`${store} sign-in is not implemented yet.`)
-      await new GogConnector(platform).authenticate()
+      await connectorFor(platform, store).authenticate()
       await saveConnection(platform, { store, status: 'connected' })
+      connections.value = await loadConnections(platform)
+      await sync(store)
+      return
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      await saveConnection(platform, {
+        store,
+        status: 'error',
+        lastError: message,
+        retryAfter: new Date(Date.now() + 60_000).toISOString()
+      })
+    } finally {
+      connecting.value = null
+      connections.value = await loadConnections(platform)
+    }
+  }
+
+  /**
+   * Pulls a store's library in. Only that store's rows are touched: other stores, manual
+   * additions and every user override survive, and enrichment is carried across so a sync
+   * does not undo the metadata pass.
+   */
+  async function sync(store: StoreId): Promise<void> {
+    const platform = usePlatform()
+    connecting.value = store
+    try {
+      const fetched = await connectorFor(platform, store).fetchLibrary()
+
+      const untouched = games.value.filter((game) => game.store !== store)
+      const forStore = games.value.filter((game) => game.store === store)
+      const carried = preserveEnrichment(fetched, forStore)
+
+      await replaceAll([...untouched, ...reconcileImport(forStore, carried)])
+      await saveConnection(platform, {
+        store,
+        status: 'connected',
+        lastSyncedAt: new Date().toISOString()
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       await saveConnection(platform, {
@@ -214,7 +264,7 @@ export function useLibrary() {
     games, applied, entries, hiddenEntries, editedKeys,
     untried, unresolved, resolved, coverage,
     importGames, entrySources, setHidden, setOverrides, addManual, removeGame,
-    connections, connecting, connect, disconnect,
+    connections, connecting, connect, sync, disconnect,
     progress, enrichError, running,
     stop: () => (abort.value.aborted = true),
     reload, replaceAll, enrich, applyMatch

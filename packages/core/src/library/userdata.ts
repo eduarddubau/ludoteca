@@ -68,3 +68,33 @@ export function reconcileImport(existing: OwnedGame[], imported: OwnedGame[]): O
   )
   return [...imported, ...survivingManual]
 }
+
+/**
+ * Carries enrichment across a re-sync. A store hands back ownership facts only — title,
+ * id, store page — so replacing rows wholesale would discard every score, cover and
+ * genre the metadata pass found, and mark the game unenriched so it all had to be
+ * fetched again. Matching is on the store's own id, which is stable.
+ */
+export function preserveEnrichment(fetched: OwnedGame[], existing: OwnedGame[]): OwnedGame[] {
+  const before = new Map(existing.map((game) => [gameKey(game), game]))
+
+  return fetched.map((game) => {
+    const previous = before.get(gameKey(game))
+    if (!previous) return game
+
+    return {
+      ...game,
+      genres: game.genres.length ? game.genres : previous.genres,
+      releaseYear: game.releaseYear ?? previous.releaseYear,
+      developer: previous.developer,
+      publisher: previous.publisher,
+      criticScore: previous.criticScore,
+      metacriticUrl: previous.metacriticUrl,
+      coverUrl: previous.coverUrl ?? game.coverUrl,
+      enrichedAt: previous.enrichedAt,
+      // Playtime a store does report should win; GOG reports none, so keep what we had.
+      playtimeMinutes: game.playtimeMinutes ?? previous.playtimeMinutes,
+      playStatus: game.playStatus === 'unknown' ? previous.playStatus : game.playStatus
+    }
+  })
+}

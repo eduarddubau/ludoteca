@@ -28,8 +28,8 @@ export const STORE_PROFILES: StoreProfile[] = [
     label: 'Steam',
     blurb: 'Owned games, playtime, and the family-shared library.',
     caveat:
-      'The family-sharing endpoints are undocumented. Repeated sign-ins have triggered an account restriction before — connect once and leave it.',
-    connectable: true
+      'Halted: repeated sign-ins triggered an account restriction. Not reconnectable until that is resolved and tested on a throwaway account.',
+    connectable: false
   },
   {
     store: 'gog',
@@ -42,7 +42,8 @@ export const STORE_PROFILES: StoreProfile[] = [
     store: 'epic',
     label: 'Epic Games',
     blurb: 'Owned games from the Epic Games Store.',
-    caveat: 'Reverse-engineered, and the most likely of the three to break.',
+    caveat:
+      'Reverse-engineered. Epic warns that its authorization code grants full account access, so it is exchanged immediately and only the refresh token is kept.',
     connectable: true
   },
   {

@@ -100,6 +100,15 @@ function since(iso: string | undefined): string {
 
           <button
             v-if="connectionFor(profile.store).status === 'connected'"
+            :disabled="library.connecting.value !== null"
+            @click="library.sync(profile.store)"
+          >
+            <template v-if="library.connecting.value === profile.store">Syncing…</template>
+            <template v-else>Sync now</template>
+          </button>
+          <button
+            v-if="connectionFor(profile.store).status === 'connected'"
+            :disabled="library.connecting.value !== null"
             @click="library.disconnect(profile.store)"
           >
             Disconnect
