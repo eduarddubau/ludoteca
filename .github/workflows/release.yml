@@ -1,0 +1,95 @@
+name: Release
+
+# Tag-driven so an artifact traces to one commit, plus manual for dry runs. Nothing is
+# built on push: a release should be a decision, not a side effect of merging.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: windows-latest
+            name: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22: npm 11 gates install scripts behind an approval prompt that cannot be
+      # answered in CI, and this is also what tsup targets.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Verify the toolchain survived install
+        shell: bash
+        run: |
+          node -e "require('electron')" >/dev/null 2>&1 || true
+          test -d node_modules/electron/dist || test -f node_modules/electron/dist/electron.exe || {
+            echo "Electron binary missing — its postinstall did not run."; exit 1; }
+
+      - run: npm run typecheck
+      - run: npm run lint
+
+      - name: Package
+        run: npm run dist --workspace @ludoteca/electron
+
+      # Checksums are the only provenance an unsigned build has, so they are generated
+      # next to the artifacts rather than by hand afterwards.
+      - name: Checksum
+        shell: bash
+        working-directory: apps/electron/release
+        run: |
+          shopt -s nullglob
+          files=(*.AppImage *.rpm *.exe)
+          [ ${#files[@]} -gt 0 ] || { echo "No artifacts were produced."; exit 1; }
+          sha256sum "${files[@]}" > "SHA256SUMS-${{ matrix.name }}.txt"
+          cat "SHA256SUMS-${{ matrix.name }}.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ludoteca-${{ matrix.name }}
+          path: |
+            apps/electron/release/*.AppImage
+            apps/electron/release/*.rpm
+            apps/electron/release/*.exe
+            apps/electron/release/SHA256SUMS-*.txt
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # gh is preinstalled on the runner, so this needs no third-party action in the
+      # step that handles the release token.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          find artifacts -type f -print
+          cat artifacts/*/SHA256SUMS-*.txt > SHA256SUMS.txt
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "Unsigned builds. Verify against SHA256SUMS.txt before running.
+
+          Windows will show a SmartScreen warning because the executable is not signed: More info -> Run anyway. That warning is accurate — check the checksum first." \
+            SHA256SUMS.txt \
+            $(find artifacts -type f \( -name '*.AppImage' -o -name '*.rpm' -o -name '*.exe' \))

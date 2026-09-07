@@ -14,6 +14,10 @@ files:
 
 asar: true
 
+# Without this the rpm is named from the package name and lands at release/@ludoteca/…,
+# a nested path nothing globbing release/*.rpm would find.
+artifactName: ${productName}-${version}-${arch}.${ext}
+
 # Closes the escape hatches a packaged Electron ships with. runAsNode is the sharp one:
 # ELECTRON_RUN_AS_NODE=1 runs arbitrary Node using the app's own binary.
 electronFuses:
@@ -33,3 +37,18 @@ linux:
     - rpm
   category: Game
   synopsis: One library across Steam, GOG and Epic
+
+# Unsigned. Since 2023 a code-signing certificate has to live on a hardware token or a
+# cloud signing service, so there is no local key to point at here. SmartScreen will
+# show a full-screen warning until that is sorted; say so wherever the build is handed
+# out rather than letting someone hit it cold.
+win:
+  target:
+    - nsis
+  # ASAR integrity is actually enforced here, unlike Linux, from Electron 30 on.
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  # Per-user, so installing needs no administrator prompt.
+  perMachine: false
