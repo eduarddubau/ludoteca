@@ -114,6 +114,7 @@ export class SteamConnector implements StoreConnector {
       storeGameId: String(game.appid),
       title: game.name ?? `App ${game.appid}`,
       ownership: { kind: 'owned' },
+      platform: 'pc',
       playStatus: game.playtime_forever ? 'played' : 'unplayed',
       playtimeMinutes: game.playtime_forever,
       genres: [],
@@ -167,6 +168,7 @@ export class SteamConnector implements StoreConnector {
             ownerAccountId: app.owner_steamids?.[0] ?? '',
             excludeReason: app.exclude_reason
           },
+          platform: 'pc' as const,
           playStatus: minutes ? ('played' as const) : ('unplayed' as const),
           playtimeMinutes: minutes,
           genres: [],

@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import {
   applyUserData, enrichLibrary, enrichWithAppId, EpicConnector, gameKey, GogConnector,
+  type ExportedGame,
   mergeLibrary, SteamConnector,
   needsEnrichment, preserveEnrichment, reconcileImport,
   type EditableField, type EnrichProgress, type LibraryEntry, type OwnedGame, type Platform,
@@ -155,13 +156,35 @@ export function useLibrary() {
   }
 
   /** Import path: manually added rows survive unless the import now carries them. */
-  async function importGames(next: OwnedGame[]): Promise<void> {
+  async function importGames(next: ExportedGame[]): Promise<void> {
     await replaceAll(reconcileImport(games.value, next))
+
+    // A backup restores what was hidden *and* what was not: writing only the hidden rows
+    // would leave a game hidden that the backup records as visible.
+    const platform = usePlatform()
+    for (const game of next) {
+      const current = userData.value.get(gameKey(game))
+      const hidden = game.hidden === true
+      const overrides = (game.overrides ?? current?.overrides ?? {}) as UserData['overrides']
+      const unchanged =
+        current?.hidden === hidden &&
+        JSON.stringify(current?.overrides ?? {}) === JSON.stringify(overrides)
+      if (!current && !hidden && !Object.keys(overrides).length) continue
+      if (unchanged) continue
+      await saveUserData(platform, {
+        store: game.store,
+        storeGameId: game.storeGameId,
+        overrides,
+        hidden
+      })
+    }
+    userData.value = await loadUserData(platform)
   }
 
+  /** Applied, not raw: an editor opened on these shows the values the library shows. */
   function entrySources(entry: LibraryEntry): OwnedGame[] {
     const keys = new Set(entry.sources.map((s) => `${s.store}:${s.storeGameId}`))
-    return games.value.filter((game) => keys.has(gameKey(game)))
+    return applied.value.filter((game) => keys.has(gameKey(game)))
   }
 
   function userEntryFor(game: OwnedGame): UserData {
@@ -260,6 +283,26 @@ export function useLibrary() {
     }
   }
 
+  /**
+   * Enriches a draft without storing it, so an add can be confirmed against real data.
+   * Shares the single-flight guard and abort signal with the bulk run: a second unpaced
+   * Steam lookup alongside one is exactly the traffic that got an account restricted.
+   */
+  async function previewMetadata(draft: OwnedGame): Promise<OwnedGame> {
+    if (running.value) throw new Error('A metadata run is in progress. Stop it first.')
+    abort.value = { aborted: false }
+    progress.value = { done: 0, total: 1, title: draft.title, matched: false }
+    try {
+      const [enriched] = await enrichLibrary(usePlatform(), [draft], {
+        force: true,
+        signal: abort.value
+      })
+      return enriched ?? draft
+    } finally {
+      progress.value = null
+    }
+  }
+
   async function applyMatch(game: OwnedGame, appId: number): Promise<void> {
     const updated = await enrichWithAppId(usePlatform(), game, appId)
     await replaceAll(merge([updated]))
@@ -268,10 +311,11 @@ export function useLibrary() {
   return {
     games, applied, entries, hiddenEntries, editedKeys,
     untried, unresolved, resolved, coverage,
-    importGames, entrySources, setHidden, setOverrides, addManual, removeGame,
+    importGames, entrySources, userDataFor: userEntryFor, setHidden, setOverrides,
+    addManual, removeGame,
     connections, connecting, connect, sync, disconnect,
     progress, enrichError, running,
     stop: () => (abort.value.aborted = true),
-    reload, replaceAll, enrich, applyMatch
+    reload, replaceAll, enrich, applyMatch, previewMetadata
   }
 }

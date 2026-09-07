@@ -1,16 +1,29 @@
 import Papa from 'papaparse'
 import type { OwnedGame } from '../connectors/types.js'
+import type { EditableField } from '../library/userdata.js'
 
 /**
- * The first four columns deliberately match the shape and names of the library CSV this
- * project started from, so an export stays readable by whatever produced that file. The
- * metadata columns follow, and `parseCsv` reads them back, which makes export/import a
- * genuine round trip rather than a one-way door.
+ * A game row plus the user state stored beside it. Rows are raw, not override-applied:
+ * a restore has to reproduce the database, and flattening corrections into base values
+ * would unpin them, so the next store sync would quietly overwrite them.
+ */
+export type ExportedGame = OwnedGame & {
+  hidden?: boolean
+  overrides?: Partial<Record<EditableField, unknown>>
+}
+
+/**
+ * Every field the database holds, because this file is the backup. `parseCsv` reads all
+ * of them back by these names, so export/import is a genuine round trip.
+ *
+ * Playtime is minutes, not hours: the old `hours_played` column rounded, so a re-import
+ * turned 90 minutes into 120. Human-readable, but not a backup.
  */
 const COLUMNS = [
   'title',
+  'store',
   'platform',
-  'hours_played',
+  'playtime_minutes',
   'status',
   'genres',
   'release_year',
@@ -18,23 +31,30 @@ const COLUMNS = [
   'metacritic_url',
   'store_url',
   'cover_url',
+  'icon_url',
+  'last_played_at',
   'store_game_id',
   'ownership',
+  'owner_account_id',
+  'exclude_reason',
   'developer',
   'publisher',
   'user_rating',
   'notes',
-  'enriched_at'
+  'enriched_at',
+  'added_manually',
+  'hidden',
+  'overrides'
 ] as const
 
-const hours = (minutes: number | undefined): string =>
-  minutes === undefined ? '' : String(Math.round(minutes / 60))
+const flag = (value: boolean | undefined): string => (value ? 'true' : 'false')
 
-export function toCsv(games: OwnedGame[]): string {
+export function toCsv(games: ExportedGame[]): string {
   const rows = games.map((game) => ({
     title: game.title,
-    platform: game.store,
-    hours_played: hours(game.playtimeMinutes),
+    store: game.store,
+    platform: game.platform,
+    playtime_minutes: game.playtimeMinutes ?? '',
     status: game.playStatus,
     genres: game.genres.join('; '),
     release_year: game.releaseYear ?? '',
@@ -42,19 +62,27 @@ export function toCsv(games: OwnedGame[]): string {
     metacritic_url: game.metacriticUrl ?? '',
     store_url: game.storeUrl ?? '',
     cover_url: game.coverUrl ?? '',
+    icon_url: game.iconUrl ?? '',
+    last_played_at: game.lastPlayedAt ?? '',
     store_game_id: game.storeGameId,
     ownership: game.ownership.kind,
+    owner_account_id: game.ownership.kind === 'familyShared' ? game.ownership.ownerAccountId : '',
+    exclude_reason:
+      game.ownership.kind === 'familyShared' ? (game.ownership.excludeReason ?? '') : '',
     developer: game.developer ?? '',
     publisher: game.publisher ?? '',
     user_rating: game.userRating ?? '',
     notes: game.notes ?? '',
-    enriched_at: game.enrichedAt ?? ''
+    enriched_at: game.enrichedAt ?? '',
+    added_manually: flag(game.addedManually),
+    hidden: flag(game.hidden),
+    overrides: Object.keys(game.overrides ?? {}).length ? JSON.stringify(game.overrides) : ''
   }))
 
   return Papa.unparse(rows, { columns: [...COLUMNS] })
 }
 
-/** Lossless, unlike the CSV: keeps genres as an array and omits empty fields entirely. */
-export function toJson(games: OwnedGame[]): string {
+/** Keeps genres as an array and omits empty fields entirely. */
+export function toJson(games: ExportedGame[]): string {
   return JSON.stringify(games, null, 2)
 }

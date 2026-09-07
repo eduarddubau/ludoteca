@@ -1,4 +1,4 @@
-import { STORE_PROFILES, tokenKey, type EditableField, type StoreConnection, type OwnedGame, type Platform, type PlayStatus, type StoreId, type UserData } from '@ludoteca/core'
+import { STORE_PROFILES, tokenKey, type EditableField, type GamePlatform, type StoreConnection, type OwnedGame, type Platform, type PlayStatus, type StoreId, type UserData } from '@ludoteca/core'
 
 interface GameRow {
   store: string
@@ -7,6 +7,7 @@ interface GameRow {
   ownership_kind: string
   owner_account_id: string | null
   exclude_reason: number | null
+  platform: string
   play_status: string
   playtime_minutes: number | null
   genres: string
@@ -38,6 +39,7 @@ function toGame(row: GameRow): OwnedGame {
             ...(row.exclude_reason !== null ? { excludeReason: row.exclude_reason } : {})
           }
         : { kind: 'owned' },
+    platform: (row.platform ?? 'pc') as GamePlatform,
     playStatus: row.play_status as PlayStatus,
     playtimeMinutes: row.playtime_minutes ?? undefined,
     genres: JSON.parse(row.genres || '[]') as string[],
@@ -66,11 +68,11 @@ async function insertRow(platform: Platform, game: OwnedGame): Promise<void> {
   await platform.db.run(
     `INSERT OR REPLACE INTO game (
        store, store_game_id, title, ownership_kind, owner_account_id, exclude_reason,
-       play_status, playtime_minutes, genres, release_year,
+       platform, play_status, playtime_minutes, genres, release_year,
        developer, publisher, critic_score, metacritic_url, store_url,
        user_rating, last_played_at, icon_url, cover_url, notes, enriched_at,
        added_manually
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       game.store,
       game.storeGameId,
@@ -78,6 +80,7 @@ async function insertRow(platform: Platform, game: OwnedGame): Promise<void> {
       game.ownership.kind,
       game.ownership.kind === 'familyShared' ? game.ownership.ownerAccountId : null,
       game.ownership.kind === 'familyShared' ? (game.ownership.excludeReason ?? null) : null,
+      game.platform,
       game.playStatus,
       game.playtimeMinutes ?? null,
       JSON.stringify(game.genres),

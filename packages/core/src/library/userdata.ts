@@ -3,6 +3,7 @@ import type { OwnedGame } from '../connectors/types.js'
 /** Fields a user may correct by hand. Deliberately not the store identity. */
 export type EditableField =
   | 'title'
+  | 'platform'
   | 'genres'
   | 'releaseYear'
   | 'developer'
@@ -14,7 +15,7 @@ export type EditableField =
   | 'notes'
 
 export const EDITABLE_FIELDS: EditableField[] = [
-  'title', 'genres', 'releaseYear', 'developer', 'publisher',
+  'title', 'platform', 'genres', 'releaseYear', 'developer', 'publisher',
   'criticScore', 'metacriticUrl', 'storeUrl', 'coverUrl', 'notes'
 ]
 
@@ -86,6 +87,8 @@ export function preserveEnrichment(fetched: OwnedGame[], existing: OwnedGame[]):
       ...game,
       genres: game.genres.length ? game.genres : previous.genres,
       releaseYear: game.releaseYear ?? previous.releaseYear,
+      // Connectors all report 'pc'; a console platform only ever came from the user.
+      platform: previous.platform,
       developer: previous.developer,
       publisher: previous.publisher,
       criticScore: previous.criticScore,

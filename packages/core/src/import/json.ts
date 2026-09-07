@@ -1,7 +1,10 @@
-import type { OwnedGame, PlayStatus, StoreId } from '../connectors/types.js'
+import { PLATFORM_IDS, STORE_IDS } from '../connectors/types.js'
+import type { ExportedGame } from '../export/csv.js'
+import type { GamePlatform, PlayStatus, StoreId } from '../connectors/types.js'
 
-const STORES: StoreId[] = ['steam', 'gog', 'epic']
+const STORES: StoreId[] = STORE_IDS
 const STATUSES: PlayStatus[] = ['played', 'unplayed', 'unknown']
+const PLATFORMS = PLATFORM_IDS
 
 const str = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim() ? value.trim() : undefined
@@ -15,7 +18,7 @@ const num = (value: unknown): number | undefined =>
  * field, because a hand-edited or foreign file will otherwise poison the database with
  * values the UI assumes are well-formed.
  */
-export function fromJson(text: string): OwnedGame[] {
+export function fromJson(text: string): ExportedGame[] {
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
@@ -27,7 +30,7 @@ export function fromJson(text: string): OwnedGame[] {
     throw new Error('Expected a JSON array of games.')
   }
 
-  const games: OwnedGame[] = []
+  const games: ExportedGame[] = []
 
   for (const [index, raw] of parsed.entries()) {
     if (typeof raw !== 'object' || raw === null) continue
@@ -38,7 +41,10 @@ export function fromJson(text: string): OwnedGame[] {
 
     const store = str(entry['store'])?.toLowerCase()
     const status = str(entry['playStatus'])?.toLowerCase()
-    const ownership = entry['ownership'] as { kind?: unknown; ownerAccountId?: unknown } | undefined
+    const platform = str(entry['platform'])?.toLowerCase()
+    const ownership = entry['ownership'] as
+      | { kind?: unknown; ownerAccountId?: unknown; excludeReason?: unknown }
+      | undefined
     const genres = Array.isArray(entry['genres'])
       ? (entry['genres'] as unknown[]).map(str).filter((g): g is string => g !== undefined)
       : []
@@ -49,8 +55,17 @@ export function fromJson(text: string): OwnedGame[] {
       title,
       ownership:
         ownership?.kind === 'familyShared'
-          ? { kind: 'familyShared', ownerAccountId: str(ownership['ownerAccountId']) ?? '' }
+          ? {
+              kind: 'familyShared',
+              ownerAccountId: str(ownership['ownerAccountId']) ?? '',
+              ...(num(ownership['excludeReason']) !== undefined
+                ? { excludeReason: num(ownership['excludeReason']) as number }
+                : {})
+            }
           : { kind: 'owned' },
+      platform: PLATFORMS.includes(platform as GamePlatform)
+        ? (platform as GamePlatform)
+        : 'pc',
       playStatus: STATUSES.includes(status as PlayStatus) ? (status as PlayStatus) : 'unknown',
       playtimeMinutes: num(entry['playtimeMinutes']),
       genres,
@@ -63,8 +78,14 @@ export function fromJson(text: string): OwnedGame[] {
       userRating: num(entry['userRating']),
       lastPlayedAt: str(entry['lastPlayedAt']),
       coverUrl: str(entry['coverUrl']),
+      iconUrl: str(entry['iconUrl']),
       notes: str(entry['notes']),
-      enrichedAt: str(entry['enrichedAt'])
+      enrichedAt: str(entry['enrichedAt']),
+      addedManually: entry['addedManually'] === true,
+      hidden: entry['hidden'] === true,
+      ...(entry['overrides'] && typeof entry['overrides'] === 'object'
+        ? { overrides: entry['overrides'] as Record<string, unknown> }
+        : {})
     })
   }
 

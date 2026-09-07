@@ -5,7 +5,9 @@ export type {
 export type {
   StoreId, Ownership, OwnedGame, PlayStatus, StoreConnector, AuthResultSummary
 } from './connectors/types.js'
-export { STORE_IDS, STORE_LABEL } from './connectors/types.js'
+export {
+  STORE_IDS, STORE_LABEL, PLATFORM_IDS, PLATFORM_LABEL, type GamePlatform
+} from './connectors/types.js'
 export {
   applyUserData, reconcileImport, preserveEnrichment, gameKey, EDITABLE_FIELDS,
   type UserData, type EditableField
@@ -28,7 +30,7 @@ export {
   EnrichTransientError,
   type EnrichProgress, type EnrichOptions, type MatchCandidate
 } from './enrich/steam.js'
-export { toCsv, toJson } from './export/csv.js'
+export { toCsv, toJson, type ExportedGame } from './export/csv.js'
 export { fromJson } from './import/json.js'
 export {
   mergeLibrary, STATUS_LABEL, SHELF_LABEL, FACET_LABEL, shelfOf,

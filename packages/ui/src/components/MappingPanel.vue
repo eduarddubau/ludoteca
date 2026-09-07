@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { toOwnedGames, type ColumnMapping, type OwnedGame, type ParsedCsv } from '@ludoteca/core'
+import {
+  toOwnedGames, type ColumnMapping, type ExportedGame, type ParsedCsv
+} from '@ludoteca/core'
 
 const props = defineProps<{ parsed: ParsedCsv; suggested: ColumnMapping }>()
-const emit = defineEmits<{ confirm: [games: OwnedGame[]]; cancel: [] }>()
+const emit = defineEmits<{ confirm: [games: ExportedGame[]]; cancel: [] }>()
 
 const mapping = ref<ColumnMapping>({ ...props.suggested })
 const error = ref('')
@@ -11,6 +13,7 @@ const error = ref('')
 const FIELDS: { key: keyof ColumnMapping; label: string }[] = [
   { key: 'title', label: 'Title' },
   { key: 'store', label: 'Store' },
+  { key: 'platform', label: 'Platform' },
   { key: 'status', label: 'Play status' },
   { key: 'playtime', label: 'Playtime' },
   { key: 'storeGameId', label: 'Store game id' }

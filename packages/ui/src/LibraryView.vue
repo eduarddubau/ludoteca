@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import {
-  FACET_LABEL, fromJson, parseCsv, sampleLibrary, SHELF_LABEL, suggestMapping, toCsv,
-  toJson,
-  type ColumnMapping, type EditableField, type LibraryEntry, type OwnedGame,
-  type ParsedCsv, type Shelf, type StoreFacet
+  FACET_LABEL, fromJson, parseCsv, PLATFORM_LABEL, sampleLibrary, SHELF_LABEL,
+  suggestMapping, toCsv, toJson,
+  type ColumnMapping, type EditableField, type ExportedGame, type GamePlatform,
+  type LibraryEntry, type OwnedGame, type ParsedCsv, type Shelf, type StoreFacet
 } from '@ludoteca/core'
 import { useLibrary } from './lib/store'
 import { SORT_OPTIONS, sortEntries, type SortKey } from './lib/sort'
@@ -18,6 +18,7 @@ const library = useLibrary()
 
 const search = ref('')
 const stores = ref<Set<StoreFacet>>(new Set())
+const platforms = ref<Set<GamePlatform>>(new Set())
 const shelves = ref<Set<Shelf>>(new Set())
 const genres = ref<Set<string>>(new Set())
 const developers = ref<Set<string>>(new Set())
@@ -31,21 +32,33 @@ const descending = ref(true)
 const showHidden = ref(false)
 const editing = ref<LibraryEntry | null>(null)
 const adding = ref(false)
+const preview = ref<OwnedGame | null>(null)
+const fetching = ref(false)
+const fetchError = ref('')
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const pendingCsv = ref<{ parsed: ParsedCsv; suggested: ColumnMapping } | null>(null)
 const importError = ref('')
 
 // Only facets actually present, so an empty "Steam (shared)" chip never appears.
-const storeOptions = computed(() =>
-  [...new Set(library.entries.value.flatMap((entry) => entry.facets))].sort()
+const source = computed(() =>
+  showHidden.value ? library.hiddenEntries.value : library.entries.value
 )
+
+// Every filter offers what is on screen, which is the hidden set while Show hidden is on
+// — options read from the visible set would omit values the listed rows actually carry.
 const shelfOptions: Shelf[] = ['played', 'backlog']
+const storeOptions = computed(() =>
+  [...new Set(source.value.flatMap((entry) => entry.facets))].sort()
+)
+const platformOptions = computed(() =>
+  [...new Set(source.value.flatMap((entry) => entry.platforms))].sort()
+)
 
 // Ordered by how many games carry each, so the useful ones are not buried under one-offs.
 function tally(pick: (entry: LibraryEntry) => string[]): [string, number][] {
   const counts = new Map<string, number>()
-  for (const entry of library.entries.value) {
+  for (const entry of source.value) {
     for (const value of pick(entry)) counts.set(value, (counts.get(value) ?? 0) + 1)
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
@@ -55,15 +68,13 @@ const genreOptions = computed(() => tally((e) => e.genres))
 const developerOptions = computed(() => tally((e) => (e.developer ? [e.developer] : [])))
 const publisherOptions = computed(() => tally((e) => (e.publisher ? [e.publisher] : [])))
 
-const source = computed(() =>
-  showHidden.value ? library.hiddenEntries.value : library.entries.value
-)
-
 const visible = computed(() => {
   const needle = search.value.trim().toLowerCase()
   const filtered = source.value.filter(
     (entry) =>
       (stores.value.size === 0 || entry.facets.some((f) => stores.value.has(f))) &&
+      (platforms.value.size === 0 ||
+        entry.platforms.some((p) => platforms.value.has(p))) &&
       (shelves.value.size === 0 || shelves.value.has(entry.shelf)) &&
       (genres.value.size === 0 || entry.genres.some((g) => genres.value.has(g))) &&
       (developers.value.size === 0 ||
@@ -73,14 +84,6 @@ const visible = computed(() => {
       (!needle || entry.title.toLowerCase().includes(needle))
   )
   return sortEntries(filtered, sortKey.value, descending.value)
-})
-
-/** The database rows behind what is on screen — export works on these, not on entries. */
-const visibleGames = computed(() => {
-  const wanted = new Set(
-    visible.value.flatMap((entry) => entry.sources.map((s) => `${s.store}:${s.storeGameId}`))
-  )
-  return library.games.value.filter((g) => wanted.has(`${g.store}:${g.storeGameId}`))
 })
 
 const totalHours = computed(() =>
@@ -121,13 +124,13 @@ async function onFileChosen(event: Event): Promise<void> {
     }
     const parsed = parseCsv(text)
     if (!parsed.rows.length) throw new Error('No rows found in that file.')
-    pendingCsv.value = { parsed, suggested: suggestMapping(parsed.headers) }
+    pendingCsv.value = { parsed, suggested: suggestMapping(parsed) }
   } catch (err) {
     importError.value = err instanceof Error ? err.message : String(err)
   }
 }
 
-async function confirmImport(next: OwnedGame[]): Promise<void> {
+async function confirmImport(next: ExportedGame[]): Promise<void> {
   await library.importGames(next)
   pendingCsv.value = null
 }
@@ -143,26 +146,43 @@ const editingEdited = computed<EditableField[]>(() => {
   )?.editedFields ?? []) as EditableField[]
 })
 
+// Every source row, like setHidden: an edit belongs to the entry, and pinning a title on
+// one of two rows would split the merged entry in half at the next render.
 async function saveEdits(changes: Partial<Record<EditableField, unknown>>): Promise<void> {
-  const target = editingSources.value[0]
-  if (!target) return
-  await library.setOverrides(target, changes)
-  editing.value = null
+  if (!editingSources.value.length) return
+  for (const game of editingSources.value) await library.setOverrides(game, changes)
+  closeEditor()
 }
 
-async function addGame(
-  game: Pick<OwnedGame, 'title' | 'store' | 'playStatus'>,
-  fetchMetadata: boolean
+async function fetchPreview(
+  draft: Pick<OwnedGame, 'title' | 'store' | 'platform' | 'playStatus'>
 ): Promise<void> {
-  const added: OwnedGame = {
-    ...game,
-    storeGameId: `manual-${crypto.randomUUID()}`,
-    ownership: { kind: 'owned' },
-    genres: []
+  fetching.value = true
+  fetchError.value = ''
+  try {
+    preview.value = await library.previewMetadata({
+      ...draft,
+      storeGameId: `draft-${crypto.randomUUID()}`,
+      ownership: { kind: 'owned' },
+      genres: []
+    })
+  } catch (err) {
+    fetchError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    fetching.value = false
   }
-  await library.addManual(added)
+}
+
+async function addGame(game: OwnedGame): Promise<void> {
+  await library.addManual(game)
+  closeEditor()
+}
+
+function closeEditor(): void {
   adding.value = false
-  if (fetchMetadata) await library.enrich([added], true)
+  editing.value = null
+  preview.value = null
+  fetchError.value = ''
 }
 
 async function refetchEditing(changes: Partial<Record<EditableField, unknown>>): Promise<void> {
@@ -170,14 +190,16 @@ async function refetchEditing(changes: Partial<Record<EditableField, unknown>>):
   const target = editingSources.value[0]
   if (!entry || !target) return
   const searchTitle = (changes.title as string | undefined) ?? entry.title
-  if (Object.keys(changes).length) await library.setOverrides(target, changes)
-  editing.value = null
+  if (Object.keys(changes).length) {
+    for (const game of editingSources.value) await library.setOverrides(game, changes)
+  }
+  closeEditor()
   await enrichOne(entry, searchTitle)
 }
 
 async function removeEditing(): Promise<void> {
   for (const game of editingSources.value) await library.removeGame(game)
-  editing.value = null
+  closeEditor()
 }
 
 function download(filename: string, contents: string, mime: string): void {
@@ -189,13 +211,26 @@ function download(filename: string, contents: string, mime: string): void {
   URL.revokeObjectURL(url)
 }
 
+/** Whole library, not the filtered view: a filter silently dropping rows from a backup
+ *  — hidden games included — is how a restore comes back short. */
+function backup(): ExportedGame[] {
+  return library.games.value.map((game) => {
+    const user = library.userDataFor(game)
+    return {
+      ...game,
+      hidden: user.hidden,
+      ...(Object.keys(user.overrides).length ? { overrides: user.overrides } : {})
+    }
+  })
+}
+
 function exportAs(format: 'csv' | 'json'): void {
   exportMenu.value = false
   const stamp = new Date().toISOString().slice(0, 10)
   if (format === 'csv') {
-    download(`ludoteca-${stamp}.csv`, toCsv(visibleGames.value), 'text/csv;charset=utf-8')
+    download(`ludoteca-${stamp}.csv`, toCsv(backup()), 'text/csv;charset=utf-8')
   } else {
-    download(`ludoteca-${stamp}.json`, toJson(visibleGames.value), 'application/json')
+    download(`ludoteca-${stamp}.json`, toJson(backup()), 'application/json')
   }
 }
 
@@ -231,8 +266,8 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
       <div class="group">
         <button @click="fileInput?.click()">Import…</button>
         <div class="menu-anchor">
-          <button :disabled="!visible.length" @click="exportMenu = !exportMenu">
-            Export… ({{ visible.length }})
+          <button :disabled="!library.games.value.length" @click="exportMenu = !exportMenu">
+            Export… ({{ library.entries.value.length }})
           </button>
           <div v-if="exportMenu" class="menu-backdrop" @click="exportMenu = false" />
           <div v-if="exportMenu" class="menu">
@@ -240,7 +275,7 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
             <button @click="exportAs('json')">JSON</button>
           </div>
         </div>
-        <button @click="adding = true; editing = null">Add game…</button>
+        <button @click="closeEditor(); adding = true">Add game…</button>
         <button v-if="!library.games.value.length" @click="library.replaceAll(sampleLibrary())">
           Sample data
         </button>
@@ -262,18 +297,27 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
       :entry="null"
       :sources="[]"
       :edited-fields="[]"
+      :preview="preview"
+      :fetching="fetching"
+      :fetch-error="fetchError"
       @add="addGame"
-      @close="adding = false"
+      @fetch="fetchPreview"
+      @invalidate="preview = null; fetchError = ''"
+      @close="closeEditor"
     />
     <GameEditor
       v-else-if="editing"
+      :key="editing.key"
       :entry="editing"
       :sources="editingSources"
       :edited-fields="editingEdited"
+      :preview="null"
+      :fetching="false"
+      fetch-error=""
       @save="saveEdits"
       @refetch="refetchEditing"
       @remove="removeEditing"
-      @close="editing = null"
+      @close="closeEditor"
     />
 
     <MappingPanel
@@ -293,6 +337,16 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
         @click="stores = toggled(stores, store)"
       >
         {{ FACET_LABEL[store] }}
+      </button>
+
+      <span class="muted spacer">Platform</span>
+      <button
+        v-for="id in platformOptions"
+        :key="id"
+        :class="{ on: platforms.has(id) }"
+        @click="platforms = toggled(platforms, id)"
+      >
+        {{ PLATFORM_LABEL[id] }}
       </button>
 
       <span class="muted spacer">Shelf</span>

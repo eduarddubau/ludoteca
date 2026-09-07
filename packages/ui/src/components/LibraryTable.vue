@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { entryMetacriticLink, SHELF_LABEL, type LibraryEntry } from '@ludoteca/core'
+import {
+  entryMetacriticLink, PLATFORM_LABEL, SHELF_LABEL, type LibraryEntry
+} from '@ludoteca/core'
 import { COLUMNS, type ColumnKey, type SortKey } from '../lib/sort'
 import ScoreChip from './ScoreChip.vue'
 import StoreLinks from './StoreLinks.vue'
@@ -26,6 +28,8 @@ function cell(entry: LibraryEntry, key: ColumnKey): string {
         : String(Math.round(entry.playtimeMinutes / 60))
     case 'releaseYear':
       return entry.releaseYear?.toString() ?? '—'
+    case 'platforms':
+      return entry.platforms.map((id) => PLATFORM_LABEL[id]).join(', ')
     case 'playStatus':
       return SHELF_LABEL[entry.shelf]
     case 'genres':

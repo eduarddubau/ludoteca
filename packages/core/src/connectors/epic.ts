@@ -226,6 +226,7 @@ function toOwnedGame(record: LibraryRecord, item: CatalogItem): OwnedGame {
     storeGameId: record.catalogItemId,
     title: item.title,
     ownership: { kind: 'owned' },
+    platform: 'pc',
     // Epic reports no playtime at all — the reason 'No play data' exists as a shelf.
     playStatus: 'unknown',
     genres: [],

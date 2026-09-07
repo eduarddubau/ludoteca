@@ -4,6 +4,7 @@ export type ColumnKey =
   | 'criticScore'
   | 'title'
   | 'stores'
+  | 'platforms'
   | 'playStatus'
   | 'hours'
   | 'genres'
@@ -32,6 +33,7 @@ export const COLUMNS: Column[] = [
   { key: 'criticScore', label: 'Score', sortable: true },
   { key: 'title', label: 'Title', sortLabel: 'Alphabetically', sortable: true },
   { key: 'stores', label: 'Stores', sortable: false },
+  { key: 'platforms', label: 'Platform', sortable: false },
   { key: 'playStatus', label: 'Shelf', sortable: false },
   { key: 'hours', label: 'Playtime', sortable: true },
   { key: 'genres', label: 'Genres', sortable: false },

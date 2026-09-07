@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
-  STORE_IDS, STORE_LABEL,
-  type EditableField, type LibraryEntry, type OwnedGame, type StoreId
+  PLATFORM_IDS, PLATFORM_LABEL, STORE_IDS, STORE_LABEL,
+  type EditableField, type GamePlatform, type LibraryEntry, type OwnedGame, type StoreId
 } from '@ludoteca/core'
 
 const props = defineProps<{
@@ -10,10 +10,16 @@ const props = defineProps<{
   entry: LibraryEntry | null
   sources: OwnedGame[]
   editedFields: EditableField[]
+  /** Set once a draft has been looked up, so an add can be confirmed against real data. */
+  preview: OwnedGame | null
+  fetching: boolean
+  fetchError: string
 }>()
 const emit = defineEmits<{
   save: [changes: Partial<Record<EditableField, unknown>>]
-  add: [game: Pick<OwnedGame, 'title' | 'store' | 'playStatus'>, fetchMetadata: boolean]
+  add: [game: OwnedGame]
+  fetch: [draft: Pick<OwnedGame, 'title' | 'store' | 'platform' | 'playStatus'>]
+  invalidate: []
   refetch: [changes: Partial<Record<EditableField, unknown>>]
   remove: []
   close: []
@@ -24,37 +30,51 @@ const manual = computed(() => props.sources.every((game) => game.addedManually))
 
 const title = ref(props.entry?.title ?? '')
 const store = ref<StoreId>(props.sources[0]?.store ?? 'steam')
+const platform = ref<GamePlatform>(props.sources[0]?.platform ?? 'pc')
 const played = ref(props.entry?.playStatus === 'played')
-const fetchMetadata = ref(true)
 
-const titleEdited = computed(() => props.editedFields.includes('title'))
 const trimmed = computed(() => title.value.trim())
-const titleChanged = computed(() => trimmed.value !== (props.entry?.title ?? ''))
+const draft = computed(() => ({
+  title: trimmed.value,
+  store: store.value,
+  platform: platform.value,
+  playStatus: (played.value ? 'played' : 'unplayed') as OwnedGame['playStatus']
+}))
 
-/** Empty unless the title moved, so a save never pins a field that did not change. */
-const changes = computed<Partial<Record<EditableField, unknown>>>(() =>
-  titleChanged.value ? { title: trimmed.value } : {}
-)
+// A stale preview is worse than none: it would confirm the add against a different title.
+watch([trimmed, store, platform], () => {
+  if (props.preview || props.fetchError) emit('invalidate')
+})
 
-const facts = computed(() => [
-  { label: 'Score', value: props.entry?.criticScore?.toString() },
-  { label: 'Released', value: props.entry?.releaseYear?.toString() },
-  { label: 'Genres', value: props.entry?.genres.join(', ') || undefined },
-  { label: 'Developer', value: props.entry?.developer },
-  { label: 'Publisher', value: props.entry?.publisher }
-])
+const changes = computed<Partial<Record<EditableField, unknown>>>(() => {
+  const next: Partial<Record<EditableField, unknown>> = {}
+  if (trimmed.value !== (props.entry?.title ?? '')) next.title = trimmed.value
+  if (platform.value !== (props.sources[0]?.platform ?? 'pc')) next.platform = platform.value
+  return next
+})
 
-function submit(): void {
+const matched = computed(() => props.preview?.coverUrl !== undefined)
+
+const facts = computed(() => {
+  const game = props.preview ?? props.entry
+  return [
+    { label: 'Score', value: game?.criticScore?.toString() },
+    { label: 'Released', value: game?.releaseYear?.toString() },
+    { label: 'Genres', value: game?.genres.join(', ') || undefined },
+    { label: 'Developer', value: game?.developer },
+    { label: 'Publisher', value: game?.publisher }
+  ]
+})
+
+function confirmAdd(): void {
   if (!trimmed.value) return
-  if (adding.value) {
-    emit(
-      'add',
-      { title: trimmed.value, store: store.value, playStatus: played.value ? 'played' : 'unplayed' },
-      fetchMetadata.value
-    )
-    return
-  }
-  emit('save', changes.value)
+  emit('add', {
+    ...(props.preview ?? {}),
+    ...draft.value,
+    storeGameId: `manual-${crypto.randomUUID()}`,
+    ownership: { kind: 'owned' },
+    genres: props.preview?.genres ?? []
+  } as OwnedGame)
 }
 </script>
 
@@ -73,44 +93,80 @@ function submit(): void {
         type="text"
         autocomplete="off"
         placeholder="Exact title, as the store spells it"
-        :class="{ edited: titleEdited }"
+        :class="{ edited: editedFields.includes('title') }"
       />
       <p class="field-hint">
         Metadata is matched on this. Correct it, then fetch again if the wrong game was found.
       </p>
     </div>
 
-    <template v-if="adding">
-      <div class="field">
-        <label for="editor-store">Store</label>
-        <select id="editor-store" v-model="store">
-          <option v-for="id in STORE_IDS" :key="id" :value="id">{{ STORE_LABEL[id] }}</option>
-        </select>
+    <div v-if="adding" class="field">
+      <label for="editor-store">Store</label>
+      <select id="editor-store" v-model="store">
+        <option v-for="id in STORE_IDS" :key="id" :value="id">{{ STORE_LABEL[id] }}</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="editor-platform">Platform</label>
+      <select
+        id="editor-platform"
+        v-model="platform"
+        :class="{ edited: editedFields.includes('platform') }"
+      >
+        <option v-for="id in PLATFORM_IDS" :key="id" :value="id">{{ PLATFORM_LABEL[id] }}</option>
+      </select>
+      <p class="field-hint">No store reports this, so console titles are set by hand.</p>
+    </div>
+
+    <label v-if="adding" class="check">
+      <input v-model="played" type="checkbox" /> I have played this
+    </label>
+
+    <div class="facts">
+      <div v-if="preview && matched" class="preview-head">
+        <img v-if="preview.coverUrl" :src="preview.coverUrl" alt="" class="preview-art" />
+        <div>
+          <strong>{{ preview.title }}</strong>
+          <p class="muted field-hint">Matched on the store. Confirm this is the right game.</p>
+        </div>
       </div>
-
-      <label class="check"><input v-model="played" type="checkbox" /> I have played this</label>
-      <label class="check">
-        <input v-model="fetchMetadata" type="checkbox" /> Fetch score, artwork and genres now
-      </label>
-    </template>
-
-    <div v-else class="facts">
       <div v-for="fact in facts" :key="fact.label" class="fact">
         <span class="fact-label">{{ fact.label }}</span>
-        <span :class="['fact-value', { missing: !fact.value }]">{{ fact.value ?? 'Not fetched' }}</span>
+        <span :class="['fact-value', { missing: !fact.value }]">
+          {{ fact.value ?? 'Not fetched' }}
+        </span>
       </div>
-      <p class="field-hint">
+      <p v-if="fetchError" class="error field-hint">{{ fetchError }}</p>
+      <p v-else-if="preview && !matched" class="field-hint">
+        No match found for “{{ preview.title }}”. Check the spelling and fetch again, or add
+        it without metadata.
+      </p>
+      <p v-else class="field-hint">
         These come from the store and are not editable — a hand-typed score would not be true.
       </p>
     </div>
 
     <div class="editor-actions">
-      <button class="primary" :disabled="!trimmed" @click="submit">
-        {{ adding ? 'Add game' : 'Save' }}
+      <button
+        v-if="adding"
+        class="primary"
+        :disabled="!trimmed || fetching"
+        @click="emit('fetch', draft)"
+      >
+        {{ fetching ? 'Fetching…' : 'Fetch metadata' }}
+      </button>
+      <button v-if="adding" :disabled="!trimmed || fetching" @click="confirmAdd">
+        {{ matched ? 'Add this game' : 'Add without metadata' }}
+      </button>
+
+      <button v-if="!adding" class="primary" :disabled="!trimmed" @click="emit('save', changes)">
+        Save
       </button>
       <button v-if="!adding" :disabled="!trimmed" @click="emit('refetch', changes)">
         Fetch metadata
       </button>
+
       <button @click="emit('close')">Cancel</button>
       <span class="grow" />
       <button v-if="!adding && manual" class="danger" @click="emit('remove')">

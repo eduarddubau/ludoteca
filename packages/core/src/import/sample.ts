@@ -25,6 +25,7 @@ export function sampleLibrary(): OwnedGame[] {
     storeGameId: `sample-${index}`,
     title,
     ownership: { kind: 'owned' as const },
+    platform: 'pc' as const,
     playStatus,
     playtimeMinutes,
     genres,

@@ -1,5 +1,5 @@
 import { STORE_LABEL } from '../connectors/types.js'
-import type { OwnedGame, PlayStatus, StoreId } from '../connectors/types.js'
+import type { GamePlatform, OwnedGame, PlayStatus, StoreId } from '../connectors/types.js'
 
 /** Where one entry is owned, kept per-store so links and playtime stay attributable. */
 export interface GameSource {
@@ -45,6 +45,7 @@ export interface LibraryEntry {
   key: string
   title: string
   stores: StoreId[]
+  platforms: GamePlatform[]
   /** Store filter values, splitting owned from family-shared. */
   facets: StoreFacet[]
   sources: GameSource[]
@@ -112,6 +113,7 @@ export function mergeLibrary(games: OwnedGame[]): LibraryEntry[] {
       key,
       title: group[0].title,
       stores: [...new Set(sources.map((s) => s.store))].sort(),
+      platforms: [...new Set(group.map((g) => g.platform))].sort(),
       facets: [
         ...new Set(
           sources.map((s): StoreFacet =>

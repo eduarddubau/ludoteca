@@ -306,6 +306,7 @@ td.col-hours, td.col-releaseYear { text-align: right; }
 .scrim .store-link { background: rgba(16, 19, 26, 0.8); }
 
 .col-stores { width: 1%; white-space: nowrap; }
+.col-platforms { width: 1%; white-space: nowrap; }
 
 /* Genre list can run to a dozen-plus entries, so the menu scrolls rather than growing. */
 .menu-scroll { max-height: 320px; overflow-y: auto; min-width: 200px; }
@@ -468,6 +469,16 @@ td.col-hours, td.col-releaseYear { text-align: right; }
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+.preview-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.preview-art { width: 54px; border-radius: 4px; flex: none; }
+.preview-head .field-hint { margin-top: 2px; }
 .fact { display: flex; gap: 12px; padding: 3px 0; font-size: 13px; }
 .fact-label { width: 90px; flex: none; color: var(--muted); }
 .fact-value { overflow: hidden; text-overflow: ellipsis; }

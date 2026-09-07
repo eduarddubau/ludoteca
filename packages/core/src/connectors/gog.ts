@@ -137,6 +137,7 @@ function toOwnedGame(product: GogProduct): OwnedGame {
     storeGameId: String(product.id),
     title: product.title,
     ownership: { kind: 'owned' },
+    platform: 'pc',
     // getFilteredProducts carries no playtime, so status is unknown until enriched.
     playStatus: 'unknown',
     genres: product.category ? [product.category] : [],

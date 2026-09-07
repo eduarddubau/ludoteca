@@ -10,6 +10,22 @@ export const STORE_LABEL: Record<StoreId, string> = {
   other: 'Other'
 }
 
+/**
+ * Where a game is played, as opposed to where it was bought. No store API reports it —
+ * Steam, GOG and Epic are all PC — so anything else is declared by hand.
+ */
+export type GamePlatform = 'pc' | 'xbox' | 'playstation' | 'switch' | 'other'
+
+export const PLATFORM_IDS: GamePlatform[] = ['pc', 'xbox', 'playstation', 'switch', 'other']
+
+export const PLATFORM_LABEL: Record<GamePlatform, string> = {
+  pc: 'PC',
+  xbox: 'Xbox',
+  playstation: 'PlayStation',
+  switch: 'Switch',
+  other: 'Other'
+}
+
 /** Family-shared titles are playable but not owned, and only one member at a time. */
 export type Ownership =
   | { kind: 'owned' }
@@ -23,6 +39,7 @@ export interface OwnedGame {
   storeGameId: string
   title: string
   ownership: Ownership
+  platform: GamePlatform
   playStatus: PlayStatus
   playtimeMinutes?: number
 
