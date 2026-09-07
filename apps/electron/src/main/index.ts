@@ -14,8 +14,15 @@ const DEV_URL = 'http://localhost:5173'
 // Served over a scheme of our own rather than file://, so the app has a real origin —
 // which is what `'self'` in the CSP, and same-origin checks generally, are defined against.
 const APP_SCHEME = 'ludoteca'
-const APP_ORIGIN = `${APP_SCHEME}://app`
+const APP_HOST = 'app'
+const APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`
 const UI_ROOT = join(__dirname, '../renderer')
+
+// Pinned so both shells agree. Electron's default app name comes from package.json's
+// `name` in development and productName once packaged, and safeStorage mints its keychain
+// entry per app name — so a name that changes with how the app was launched makes every
+// stored token undecryptable in the other shell.
+app.setName('Ludoteca')
 
 const appOrigin = isDev ? DEV_URL : APP_ORIGIN
 
@@ -28,25 +35,36 @@ protocol.registerSchemesAsPrivileged([
 
 function serveApp(): void {
   protocol.handle(APP_SCHEME, (request) => {
-    const { pathname } = new URL(request.url)
-    const target = join(UI_ROOT, pathname === '/' ? 'index.html' : decodeURIComponent(pathname))
+    const { host, pathname } = new URL(request.url)
+    // Every host is a separate origin, and origin-scoped storage with it. Serving the
+    // bundle from any of them would hand a second copy of the app a second database.
+    if (host !== APP_HOST) return new Response('Not found', { status: 404 })
 
-    // join() collapses ..; this is what stops a crafted path escaping the bundle.
+    let decoded: string
+    try {
+      decoded = pathname === '/' ? 'index.html' : decodeURIComponent(pathname)
+    } catch {
+      return new Response('Bad request', { status: 400 })
+    }
+
+    const target = join(UI_ROOT, decoded)
+    // join() collapses ..; this is what stops a crafted path escaping the bundle. The
+    // empty case is the bundle root itself, which resolves to a directory.
     const inside = relative(UI_ROOT, target)
-    if (inside.startsWith('..') || isAbsolute(inside)) {
-      return new Response('Forbidden', { status: 403 })
+    if (!inside || inside.startsWith('..') || isAbsolute(inside)) {
+      return new Response('Not found', { status: 404 })
     }
     return net.fetch(pathToFileURL(target).toString())
   })
 }
 
 /** Node's URL gives a non-special scheme no origin, so compare the parts that exist. */
-function originOf(raw: string): string {
+function originOf(raw: string): string | null {
   try {
     const url = new URL(raw)
     return `${url.protocol}//${url.host}`
   } catch {
-    return ''
+    return null
   }
 }
 
@@ -71,10 +89,24 @@ function openExternally(raw: string): void {
  * a remote page the whole preload surface — database and keychain included.
  */
 function confineToApp(window: BrowserWindow): void {
+  // Fails closed: an unparseable URL is null, and null never equals the app's origin.
+  const allowed = (next: string): boolean => {
+    const origin = originOf(next)
+    return origin !== null && origin === originOf(appOrigin)
+  }
+
   window.webContents.on('will-navigate', (event, next) => {
-    if (originOf(next) === originOf(appOrigin)) return
+    if (allowed(next)) return
     event.preventDefault()
     openExternally(next)
+  })
+
+  // will-navigate covers the main frame only; a subframe navigating fires this instead.
+  // `frame-src 'none'` already blocks frames, so this is the second layer rather than
+  // the only one — which is what the CSP being relaxed later would otherwise cost.
+  window.webContents.on('will-frame-navigate', (event) => {
+    if (event.isMainFrame || allowed(event.url)) return
+    event.preventDefault()
   })
 }
 
@@ -89,16 +121,16 @@ function denyAllPermissions(): void {
 }
 
 /**
- * Covers is the only remote content the app window loads; everything else it needs comes
- * over IPC. Dev additionally serves the bundle and its socket from the Vite origin.
+ * Cover art is the only remote content the app document loads; everything else it needs
+ * comes over IPC. Dev needs the Vite websocket, which `'self'` does not cover.
  */
 function applyContentSecurityPolicy(): void {
   const policy = [
     "default-src 'self'",
-    isDev ? `script-src 'self' 'unsafe-inline' ${DEV_URL}` : "script-src 'self'",
+    isDev ? "script-src 'self' 'unsafe-inline'" : "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' https: data:",
-    isDev ? `connect-src 'self' ${DEV_URL} ws://localhost:5173` : "connect-src 'self'",
+    isDev ? "connect-src 'self' ws://localhost:5173" : "connect-src 'self'",
     "font-src 'self' data:",
     "object-src 'none'",
     "frame-src 'none'",
@@ -106,9 +138,14 @@ function applyContentSecurityPolicy(): void {
     "form-action 'none'"
   ].join('; ')
 
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+  // Scoped to the app's own documents. Unfiltered, this rewrites the headers of every
+  // response on the default session — including the store API calls platform.http makes
+  // through net.fetch, which were coming back with a Content-Security-Policy stapled on.
+  const appUrls = isDev ? [`${DEV_URL}/*`] : [`${APP_ORIGIN}/*`]
+
+  session.defaultSession.webRequest.onHeadersReceived({ urls: appUrls }, (details, callback) => {
     callback({
-      responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [policy] }
+      responseHeaders: { ...(details.responseHeaders ?? {}), 'Content-Security-Policy': [policy] }
     })
   })
 }

@@ -89,6 +89,19 @@ function secretsPath(): string {
  * store's fixed redirect. The redirect URI belongs to the official launcher client and
  * cannot be changed, which is why a loopback callback is no use here.
  */
+/**
+ * Both windows that render a store's own pages. Spelled out rather than left to
+ * defaults, and shared so tightening one cannot silently miss the other. No preload:
+ * nothing of ours is reachable from a page we do not control.
+ */
+const UNTRUSTED_PREFS = {
+  partition: STORE_PARTITION,
+  sandbox: true,
+  contextIsolation: true,
+  nodeIntegration: false,
+  webSecurity: true
+} as const
+
 export async function authenticate(
   url: string,
   pattern: SerializedPattern,
@@ -102,77 +115,98 @@ export async function authenticate(
     height: 760,
     title: title ?? 'Sign in',
     autoHideMenuBar: true,
-    // Spelled out rather than left to defaults: this is the one window that renders a
-    // page we do not control. No preload, so nothing of ours is reachable from it.
-    webPreferences: {
-      partition: STORE_PARTITION,
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false,
-      webSecurity: true
-    }
+    webPreferences: { ...UNTRUSTED_PREFS }
   })
 
-  // Social sign-in opens popups, and sending them to the system browser would land them
-  // in a different cookie jar, so the flow could never complete. They stay in this
-  // partition with the same restrictions instead.
-  authWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith('https:')) return { action: 'deny' }
-    return {
-      action: 'allow',
-      overrideBrowserWindowOptions: {
-        autoHideMenuBar: true,
-        webPreferences: {
-          partition: STORE_PARTITION,
-          sandbox: true,
-          contextIsolation: true,
-          nodeIntegration: false,
-          webSecurity: true
-        }
-      }
-    }
-  })
+  // Popups opened by the store page. Tracked so they close with the sign-in rather than
+  // outliving it as loose windows rendering a third party, which on Linux would also
+  // keep the app from quitting.
+  const popups = new Set<BrowserWindow>()
 
   return new Promise((resolve, reject) => {
     let settled = false
+
+    const closeAll = (): void => {
+      for (const popup of popups) if (!popup.isDestroyed()) popup.destroy()
+      popups.clear()
+      if (!authWindow.isDestroyed()) authWindow.destroy()
+    }
 
     const timer = timeoutMs
       ? setTimeout(() => {
           if (settled) return
           settled = true
           reject(new Error(`No matching redirect within ${timeoutMs}ms.`))
-          authWindow.destroy()
+          closeAll()
         }, timeoutMs)
       : undefined
 
     const finish = async (redirectUrl: string): Promise<void> => {
       if (settled) return
       settled = true
-      const raw = await authWindow.webContents.session.cookies.get({ url: redirectUrl })
+      const raw = await session.fromPartition(STORE_PARTITION).cookies.get({ url: redirectUrl })
       clearTimeout(timer)
       resolve({
         redirectUrl,
         cookies: raw.map((c) => ({ name: c.name, value: c.value, domain: c.domain ?? '' }))
       })
-      authWindow.destroy()
+      closeAll()
     }
 
-    // will-redirect catches server 30x hops that never become a committed navigation.
-    authWindow.webContents.on('will-redirect', (_e, next) => {
-      if (match.test(next)) void finish(next)
-    })
-    authWindow.webContents.on('did-navigate', (_e, next) => {
-      if (match.test(next)) void finish(next)
+    // Both events, on every window in the flow: will-redirect catches server 30x hops
+    // that never commit a navigation, did-navigate catches everything client-side. A
+    // social sign-in can complete inside the popup, so watching only the opener would
+    // wait out the timeout on exactly the flow popups were allowed for.
+    const watch = (contents: Electron.WebContents): void => {
+      contents.on('will-redirect', (_e, next) => {
+        if (match.test(next)) void finish(next)
+      })
+      contents.on('did-navigate', (_e, next) => {
+        if (match.test(next)) void finish(next)
+      })
+    }
+    watch(authWindow.webContents)
+
+    // Social sign-in opens popups, and sending them to the system browser would put them
+    // in a different cookie jar, so the flow could never complete. about:blank is allowed
+    // because `window.open('about:blank')` then assigning location is the common shape.
+    authWindow.webContents.setWindowOpenHandler(({ url: target }) => {
+      if (!isPopupAllowed(target)) return { action: 'deny' }
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          autoHideMenuBar: true,
+          parent: authWindow,
+          webPreferences: { ...UNTRUSTED_PREFS }
+        }
+      }
     })
 
+    authWindow.webContents.on('did-create-window', (popup) => {
+      popups.add(popup)
+      watch(popup.webContents)
+      popup.on('closed', () => popups.delete(popup))
+    })
 
     authWindow.on('closed', () => {
       clearTimeout(timer)
+      for (const popup of popups) if (!popup.isDestroyed()) popup.destroy()
+      popups.clear()
       if (!settled) reject(new Error('Sign-in window was closed before completing.'))
     })
 
     void authWindow.loadURL(url)
   })
+}
+
+/** Parsed, not prefix-matched: `HTTPS://` is https and `https:foo` is not a page. */
+function isPopupAllowed(target: string): boolean {
+  if (target === 'about:blank' || target === '') return true
+  try {
+    return new URL(target).protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 // Same partition as the auth window, or the login session's cookies are invisible here.
@@ -215,7 +249,15 @@ export const secrets = {
   get: async (key: string): Promise<string | null> => {
     const stored = readSecrets()[key]
     if (!stored) return null
-    return safeStorage.decryptString(Buffer.from(stored, 'base64'))
+    try {
+      return safeStorage.decryptString(Buffer.from(stored, 'base64'))
+    } catch {
+      // The keychain key is gone or was minted for another app name. Drop the blob so
+      // the store reads as signed out and can be reconnected, rather than throwing on
+      // every isConnected() with no in-app way to clear it.
+      await secrets.delete(key)
+      return null
+    }
   },
   set: async (key: string, value: string): Promise<void> => {
     // A refresh token in a plain file is the exact liability that has already bitten us.

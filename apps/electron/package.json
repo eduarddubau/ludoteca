@@ -7,11 +7,10 @@
     "build": "tsup && node scripts/copy-renderer.mjs",
     "dev": "tsup && wait-on tcp:5173 && cross-env LUDOTECA_DEV=1 electron .",
     "typecheck": "tsc --noEmit",
-    "package": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder"
+    "package": "npm run build -w @ludoteca/ui && npm run build && electron-builder --dir",
+    "dist": "npm run build -w @ludoteca/ui && npm run build && electron-builder"
   },
   "dependencies": {
-    "@ludoteca/core": "*",
     "better-sqlite3": "^13.0.3"
   },
   "devDependencies": {
@@ -21,7 +20,8 @@
     "electron": "44.2.0",
     "electron-builder": "^26.15.3",
     "tsup": "^8.5.0",
-    "wait-on": "^9.0.1"
+    "wait-on": "^9.0.1",
+    "@ludoteca/core": "*"
   },
   "description": "One library across Steam, GOG and Epic",
   "author": "Eduard Dubau",
