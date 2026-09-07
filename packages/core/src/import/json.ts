@@ -1,4 +1,5 @@
 import { PLATFORM_IDS, STORE_IDS } from '../connectors/types.js'
+import { sanitizeOverrides } from '../library/userdata.js'
 import type { ExportedGame } from '../export/csv.js'
 import type { GamePlatform, PlayStatus, StoreId } from '../connectors/types.js'
 
@@ -50,7 +51,7 @@ export function fromJson(text: string): ExportedGame[] {
       : []
 
     games.push({
-      store: STORES.includes(store as StoreId) ? (store as StoreId) : 'steam',
+      store: STORES.includes(store as StoreId) ? (store as StoreId) : 'other',
       storeGameId: str(entry['storeGameId']) ?? `json-${index}`,
       title,
       ownership:
@@ -82,10 +83,8 @@ export function fromJson(text: string): ExportedGame[] {
       notes: str(entry['notes']),
       enrichedAt: str(entry['enrichedAt']),
       addedManually: entry['addedManually'] === true,
-      hidden: entry['hidden'] === true,
-      ...(entry['overrides'] && typeof entry['overrides'] === 'object'
-        ? { overrides: entry['overrides'] as Record<string, unknown> }
-        : {})
+      ...('hidden' in entry ? { hidden: entry['hidden'] === true } : {}),
+      ...('overrides' in entry ? { overrides: sanitizeOverrides(entry['overrides']) } : {})
     })
   }
 

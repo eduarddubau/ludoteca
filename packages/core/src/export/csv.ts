@@ -49,6 +49,7 @@ const COLUMNS = [
 
 const flag = (value: boolean | undefined): string => (value ? 'true' : 'false')
 
+
 export function toCsv(games: ExportedGame[]): string {
   const rows = games.map((game) => ({
     title: game.title,

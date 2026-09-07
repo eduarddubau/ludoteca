@@ -1,7 +1,9 @@
 import Papa from 'papaparse'
+import { sanitizeOverrides } from '../library/userdata.js'
 import type { ExportedGame } from '../export/csv.js'
 import { STORE_IDS } from '../connectors/types.js'
 import type { GamePlatform, Ownership, OwnedGame, PlayStatus, StoreId } from '../connectors/types.js'
+import type { EditableField } from '../library/userdata.js'
 
 export interface ParsedCsv {
   headers: string[]
@@ -48,7 +50,8 @@ const normalize = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '
 function holdsStoreNames(rows: Record<string, string>[], header: string): boolean {
   const values = rows.slice(0, 50).map((row) => normalize(row[header] ?? '')).filter(Boolean)
   if (!values.length) return false
-  const hits = values.filter((v) => KNOWN_STORES.some((store) => v.includes(store))).length
+  const named = KNOWN_STORES.filter((store) => store !== 'other')
+  const hits = values.filter((v) => named.some((store) => v.includes(store))).length
   return hits * 2 > values.length
 }
 
@@ -106,14 +109,12 @@ function toStore(raw: string | undefined): StoreId {
 }
 
 /** A malformed cell must not fail the whole import; the row is still worth having. */
-function readOverrides(raw: string | undefined): Record<string, unknown> | undefined {
-  if (!raw?.trim()) return undefined
+function readOverrides(raw: string | undefined): Partial<Record<EditableField, unknown>> {
+  if (!raw?.trim()) return {}
   try {
-    const parsed = JSON.parse(raw) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
-    return Object.keys(parsed).length ? (parsed as Record<string, unknown>) : undefined
+    return sanitizeOverrides(JSON.parse(raw))
   } catch {
-    return undefined
+    return {}
   }
 }
 
@@ -183,6 +184,10 @@ function readEnrichment(row: Record<string, string>): Partial<OwnedGame> {
 
 export function toOwnedGames(parsed: ParsedCsv, mapping: ColumnMapping): ExportedGame[] {
   const games: ExportedGame[] = []
+  // Only this project's own export writes these, and only then does a blank cell mean
+  // "not hidden" rather than "this file has nothing to say about hiding".
+  const hasHidden = parsed.headers.includes('hidden')
+  const hasOverrides = parsed.headers.includes('overrides')
 
   parsed.rows.forEach((row, index) => {
     const title = mapping.title ? row[mapping.title]?.trim() : ''
@@ -195,8 +200,8 @@ export function toOwnedGames(parsed: ParsedCsv, mapping: ColumnMapping): Exporte
       ownership: toOwnership(row),
       platform: toPlatform(mapping.platform ? row[mapping.platform] : undefined),
       addedManually: boolean(row['added_manually']),
-      hidden: boolean(row['hidden']),
-      ...(readOverrides(row['overrides']) ? { overrides: readOverrides(row['overrides']) } : {}),
+      ...(hasHidden ? { hidden: boolean(row['hidden']) } : {}),
+      ...(hasOverrides ? { overrides: readOverrides(row['overrides']) } : {}),
       playStatus: toStatus(mapping.status ? row[mapping.status] : undefined),
       playtimeMinutes: mapping.playtime ? toMinutes(row[mapping.playtime], mapping.playtime) : undefined,
       genres: [],

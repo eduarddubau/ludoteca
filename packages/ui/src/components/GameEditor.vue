@@ -41,8 +41,9 @@ const draft = computed(() => ({
   playStatus: (played.value ? 'played' : 'unplayed') as OwnedGame['playStatus']
 }))
 
-// A stale preview is worse than none: it would confirm the add against a different title.
-watch([trimmed, store, platform], () => {
+// Title and store are what the lookup used; platform plays no part in matching, so
+// choosing one must not discard a match already fetched.
+watch([trimmed, store], () => {
   if (props.preview || props.fetchError) emit('invalidate')
 })
 
@@ -66,8 +67,11 @@ const facts = computed(() => {
   ]
 })
 
+const submitting = ref(false)
+
 function confirmAdd(): void {
-  if (!trimmed.value) return
+  if (!trimmed.value || submitting.value) return
+  submitting.value = true
   emit('add', {
     ...(props.preview ?? {}),
     ...draft.value,
@@ -156,7 +160,7 @@ function confirmAdd(): void {
       >
         {{ fetching ? 'Fetching…' : 'Fetch metadata' }}
       </button>
-      <button v-if="adding" :disabled="!trimmed || fetching" @click="confirmAdd">
+      <button v-if="adding" :disabled="!trimmed || fetching || submitting" @click="confirmAdd">
         {{ matched ? 'Add this game' : 'Add without metadata' }}
       </button>
 

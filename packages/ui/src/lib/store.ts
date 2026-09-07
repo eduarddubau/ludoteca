@@ -73,7 +73,10 @@ export function useLibrary() {
       { label: 'Publisher', count: has((g) => g.publisher), total }
     ]
   })
-  const running = computed(() => progress.value !== null)
+  // Blocks a bulk run while a preview is out, without putting the preview on the progress
+  // bar or under the Stop button — a cancelled preview would read as "no match found".
+  const previewing = ref(false)
+  const running = computed(() => progress.value !== null || previewing.value)
 
   async function reload(): Promise<void> {
     const platform = usePlatform()
@@ -163,20 +166,18 @@ export function useLibrary() {
     // would leave a game hidden that the backup records as visible.
     const platform = usePlatform()
     for (const game of next) {
+      if (game.hidden === undefined && game.overrides === undefined) continue
       const current = userData.value.get(gameKey(game))
-      const hidden = game.hidden === true
+      const hidden = game.hidden ?? current?.hidden ?? false
       const overrides = (game.overrides ?? current?.overrides ?? {}) as UserData['overrides']
-      const unchanged =
+      if (!current && !hidden && !Object.keys(overrides).length) continue
+      if (
         current?.hidden === hidden &&
         JSON.stringify(current?.overrides ?? {}) === JSON.stringify(overrides)
-      if (!current && !hidden && !Object.keys(overrides).length) continue
-      if (unchanged) continue
-      await saveUserData(platform, {
-        store: game.store,
-        storeGameId: game.storeGameId,
-        overrides,
-        hidden
-      })
+      ) {
+        continue
+      }
+      await saveUserData(platform, { store: game.store, storeGameId: game.storeGameId, overrides, hidden })
     }
     userData.value = await loadUserData(platform)
   }
@@ -198,35 +199,38 @@ export function useLibrary() {
     )
   }
 
-  async function writeUserData(entry: UserData): Promise<void> {
+  async function writeUserData(entries: UserData[]): Promise<void> {
     const platform = usePlatform()
-    await saveUserData(platform, entry)
+    for (const entry of entries) await saveUserData(platform, entry)
     userData.value = await loadUserData(platform)
   }
 
   /** Hiding acts on the whole entry: hiding a game the user owns twice hides both rows. */
   async function setHidden(entry: LibraryEntry, hidden: boolean): Promise<void> {
-    for (const game of entrySources(entry)) {
-      await writeUserData({ ...userEntryFor(game), hidden })
-    }
+    await writeUserData(entrySources(entry).map((game) => ({ ...userEntryFor(game), hidden })))
   }
 
   /** Applies a whole edit in one write; per-field saving cost a full reload each time. */
   async function setOverrides(
-    game: OwnedGame,
+    targets: OwnedGame[],
     changes: Partial<Record<EditableField, unknown>>
   ): Promise<void> {
-    const current = userEntryFor(game)
-    const overrides = { ...current.overrides }
+    await writeUserData(
+      targets.map((game) => {
+        const current = userEntryFor(game)
+        const overrides = { ...current.overrides }
 
-    for (const [field, value] of Object.entries(changes) as [EditableField, unknown][]) {
-      // An empty value clears the override rather than pinning a blank over synced data.
-      const empty = value === undefined || value === '' || (Array.isArray(value) && !value.length)
-      if (empty) delete overrides[field]
-      else overrides[field] = value
-    }
+        for (const [field, value] of Object.entries(changes) as [EditableField, unknown][]) {
+          // An empty value clears the override rather than pinning a blank over synced data.
+          const empty =
+            value === undefined || value === '' || (Array.isArray(value) && !value.length)
+          if (empty) delete overrides[field]
+          else overrides[field] = value
+        }
 
-    await writeUserData({ ...current, overrides })
+        return { ...current, overrides }
+      })
+    )
   }
 
   async function addManual(game: OwnedGame): Promise<void> {
@@ -290,16 +294,12 @@ export function useLibrary() {
    */
   async function previewMetadata(draft: OwnedGame): Promise<OwnedGame> {
     if (running.value) throw new Error('A metadata run is in progress. Stop it first.')
-    abort.value = { aborted: false }
-    progress.value = { done: 0, total: 1, title: draft.title, matched: false }
+    previewing.value = true
     try {
-      const [enriched] = await enrichLibrary(usePlatform(), [draft], {
-        force: true,
-        signal: abort.value
-      })
+      const [enriched] = await enrichLibrary(usePlatform(), [draft], { force: true })
       return enriched ?? draft
     } finally {
-      progress.value = null
+      previewing.value = false
     }
   }
 

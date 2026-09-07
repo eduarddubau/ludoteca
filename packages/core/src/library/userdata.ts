@@ -19,6 +19,25 @@ export const EDITABLE_FIELDS: EditableField[] = [
   'criticScore', 'metacriticUrl', 'storeUrl', 'coverUrl', 'notes'
 ]
 
+/**
+ * Keeps an imported file from writing arbitrary keys into user_data. `applyUserData`
+ * spreads overrides straight onto the game, so an unfiltered `store` or `storeGameId`
+ * would move the row's identity away from the database row it came from, and a `genres`
+ * string would break every consumer expecting an array.
+ */
+export function sanitizeOverrides(raw: unknown): Partial<Record<EditableField, unknown>> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const source = raw as Record<string, unknown>
+  const clean: Partial<Record<EditableField, unknown>> = {}
+  for (const field of EDITABLE_FIELDS) {
+    if (!(field in source)) continue
+    const value = source[field]
+    if (field === 'genres' && !Array.isArray(value)) continue
+    clean[field] = value
+  }
+  return clean
+}
+
 export interface UserData {
   store: string
   storeGameId: string

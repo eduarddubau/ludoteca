@@ -10,6 +10,7 @@ export {
 } from './connectors/types.js'
 export {
   applyUserData, reconcileImport, preserveEnrichment, gameKey, EDITABLE_FIELDS,
+  sanitizeOverrides,
   type UserData, type EditableField
 } from './library/userdata.js'
 export { GogConnector } from './connectors/gog.js'

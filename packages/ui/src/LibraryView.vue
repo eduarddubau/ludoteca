@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import {
   FACET_LABEL, fromJson, parseCsv, PLATFORM_LABEL, sampleLibrary, SHELF_LABEL,
   suggestMapping, toCsv, toJson,
@@ -40,7 +40,6 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const pendingCsv = ref<{ parsed: ParsedCsv; suggested: ColumnMapping } | null>(null)
 const importError = ref('')
 
-// Only facets actually present, so an empty "Steam (shared)" chip never appears.
 const source = computed(() =>
   showHidden.value ? library.hiddenEntries.value : library.entries.value
 )
@@ -67,6 +66,22 @@ function tally(pick: (entry: LibraryEntry) => string[]): [string, number][] {
 const genreOptions = computed(() => tally((e) => e.genres))
 const developerOptions = computed(() => tally((e) => (e.developer ? [e.developer] : [])))
 const publisherOptions = computed(() => tally((e) => (e.publisher ? [e.publisher] : [])))
+
+// Toggling Show hidden changes what the chips offer. A selection whose chip is gone would
+// filter the view to nothing with no visible control left to clear it.
+function prune<T>(selected: Ref<Set<T>>, allowed: T[]): void {
+  const keep = new Set(allowed)
+  if ([...selected.value].every((value) => keep.has(value))) return
+  selected.value = new Set([...selected.value].filter((value) => keep.has(value)))
+}
+
+watch(source, () => {
+  prune(stores, storeOptions.value)
+  prune(platforms, platformOptions.value)
+  prune(genres, genreOptions.value.map(([value]) => value))
+  prune(developers, developerOptions.value.map(([value]) => value))
+  prune(publishers, publisherOptions.value.map(([value]) => value))
+})
 
 const visible = computed(() => {
   const needle = search.value.trim().toLowerCase()
@@ -150,27 +165,43 @@ const editingEdited = computed<EditableField[]>(() => {
 // one of two rows would split the merged entry in half at the next render.
 async function saveEdits(changes: Partial<Record<EditableField, unknown>>): Promise<void> {
   if (!editingSources.value.length) return
-  for (const game of editingSources.value) await library.setOverrides(game, changes)
+  await library.setOverrides(editingSources.value, changes)
   closeEditor()
 }
+
+// Bumped by every edit and every close, so a lookup that outlives the form it was
+// started from is discarded instead of landing in it under a title it never matched.
+let previewGeneration = 0
 
 async function fetchPreview(
   draft: Pick<OwnedGame, 'title' | 'store' | 'platform' | 'playStatus'>
 ): Promise<void> {
+  const generation = ++previewGeneration
   fetching.value = true
   fetchError.value = ''
+  preview.value = null
   try {
-    preview.value = await library.previewMetadata({
+    const found = await library.previewMetadata({
       ...draft,
       storeGameId: `draft-${crypto.randomUUID()}`,
       ownership: { kind: 'owned' },
       genres: []
     })
+    if (generation !== previewGeneration) return
+    preview.value = found
   } catch (err) {
+    if (generation !== previewGeneration) return
     fetchError.value = err instanceof Error ? err.message : String(err)
   } finally {
-    fetching.value = false
+    if (generation === previewGeneration) fetching.value = false
   }
+}
+
+function invalidatePreview(): void {
+  previewGeneration++
+  preview.value = null
+  fetchError.value = ''
+  fetching.value = false
 }
 
 async function addGame(game: OwnedGame): Promise<void> {
@@ -181,17 +212,15 @@ async function addGame(game: OwnedGame): Promise<void> {
 function closeEditor(): void {
   adding.value = false
   editing.value = null
-  preview.value = null
-  fetchError.value = ''
+  invalidatePreview()
 }
 
 async function refetchEditing(changes: Partial<Record<EditableField, unknown>>): Promise<void> {
   const entry = editing.value
-  const target = editingSources.value[0]
-  if (!entry || !target) return
+  if (!entry || !editingSources.value.length) return
   const searchTitle = (changes.title as string | undefined) ?? entry.title
   if (Object.keys(changes).length) {
-    for (const game of editingSources.value) await library.setOverrides(game, changes)
+    await library.setOverrides(editingSources.value, changes)
   }
   closeEditor()
   await enrichOne(entry, searchTitle)
@@ -267,7 +296,7 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
         <button @click="fileInput?.click()">Import…</button>
         <div class="menu-anchor">
           <button :disabled="!library.games.value.length" @click="exportMenu = !exportMenu">
-            Export… ({{ library.entries.value.length }})
+            Export… ({{ library.games.value.length }})
           </button>
           <div v-if="exportMenu" class="menu-backdrop" @click="exportMenu = false" />
           <div v-if="exportMenu" class="menu">
@@ -302,7 +331,7 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
       :fetch-error="fetchError"
       @add="addGame"
       @fetch="fetchPreview"
-      @invalidate="preview = null; fetchError = ''"
+      @invalidate="invalidatePreview"
       @close="closeEditor"
     />
     <GameEditor
