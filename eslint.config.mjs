@@ -29,6 +29,14 @@ export default ts.config(
   ...vue.configs['flat/recommended'],
   // TypeScript already resolves globals; no-undef only produces false positives here.
   { files: ['**/*.ts', '**/*.vue'], rules: { 'no-undef': 'off' } },
+  // Build scripts are plain Node ESM, outside the shell boundary the rest of this
+  // config enforces.
+  {
+    files: ['**/scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { console: 'readonly', process: 'readonly', URL: 'readonly' }
+    }
+  },
   {
     files: ['**/*.vue'],
     languageOptions: { parser: vueParser, parserOptions: { parser: ts.parser } }

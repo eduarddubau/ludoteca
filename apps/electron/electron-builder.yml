@@ -1,0 +1,35 @@
+appId: dev.ludoteca.app
+productName: Ludoteca
+# Without this the binary is named after the workspace package: "@ludotecaelectron".
+executableName: ludoteca
+directories:
+  output: release
+  buildResources: build
+
+# dist/ is the whole app: bundled main and preload, plus the UI copied in by the build
+# script. Nothing outside this directory is reachable from a packaged bundle.
+files:
+  - dist/**
+  - package.json
+
+asar: true
+
+# Closes the escape hatches a packaged Electron ships with. runAsNode is the sharp one:
+# ELECTRON_RUN_AS_NODE=1 runs arbitrary Node using the app's own binary.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  loadBrowserProcessSpecificV8Snapshot: false
+  # The app is served over its own scheme, so file:// needs no extra privileges.
+  grantFileProtocolExtraPrivileges: false
+
+linux:
+  target:
+    - AppImage
+    - rpm
+  category: Game
+  synopsis: One library across Steam, GOG and Epic

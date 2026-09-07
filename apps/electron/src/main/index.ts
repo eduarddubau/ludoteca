@@ -1,5 +1,7 @@
-import { app, BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from 'electron'
-import { join } from 'node:path'
+import {
+  app, BrowserWindow, ipcMain, net, protocol, session, shell, type IpcMainInvokeEvent
+} from 'electron'
+import { join, relative, isAbsolute } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
   authenticate, cookies, database, http, secrets, STORE_PARTITION, type SerializedPattern
@@ -9,8 +11,44 @@ import type { HttpRequest } from '@ludoteca/core'
 const isDev = process.env['LUDOTECA_DEV'] === '1'
 const DEV_URL = 'http://localhost:5173'
 
-const appIndex = join(__dirname, '../../../../packages/ui/dist/index.html')
-const appOrigin = isDev ? DEV_URL : pathToFileURL(appIndex).href
+// Served over a scheme of our own rather than file://, so the app has a real origin —
+// which is what `'self'` in the CSP, and same-origin checks generally, are defined against.
+const APP_SCHEME = 'ludoteca'
+const APP_ORIGIN = `${APP_SCHEME}://app`
+const UI_ROOT = join(__dirname, '../renderer')
+
+const appOrigin = isDev ? DEV_URL : APP_ORIGIN
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: APP_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, codeCache: true }
+  }
+])
+
+function serveApp(): void {
+  protocol.handle(APP_SCHEME, (request) => {
+    const { pathname } = new URL(request.url)
+    const target = join(UI_ROOT, pathname === '/' ? 'index.html' : decodeURIComponent(pathname))
+
+    // join() collapses ..; this is what stops a crafted path escaping the bundle.
+    const inside = relative(UI_ROOT, target)
+    if (inside.startsWith('..') || isAbsolute(inside)) {
+      return new Response('Forbidden', { status: 403 })
+    }
+    return net.fetch(pathToFileURL(target).toString())
+  })
+}
+
+/** Node's URL gives a non-special scheme no origin, so compare the parts that exist. */
+function originOf(raw: string): string {
+  try {
+    const url = new URL(raw)
+    return `${url.protocol}//${url.host}`
+  } catch {
+    return ''
+  }
+}
 
 /**
  * `store_url` and `metacritic_url` are import columns, so their scheme is whatever a
@@ -34,9 +72,7 @@ function openExternally(raw: string): void {
  */
 function confineToApp(window: BrowserWindow): void {
   window.webContents.on('will-navigate', (event, next) => {
-    if (next === appOrigin || next.startsWith(`${appOrigin}#`) || next.startsWith(`${appOrigin}?`)) {
-      return
-    }
+    if (originOf(next) === originOf(appOrigin)) return
     event.preventDefault()
     openExternally(next)
   })
@@ -106,11 +142,7 @@ function createWindow(): void {
   })
   confineToApp(window)
 
-  if (isDev) {
-    void window.loadURL(DEV_URL)
-  } else {
-    void window.loadFile(appIndex)
-  }
+  void window.loadURL(isDev ? DEV_URL : APP_ORIGIN)
 }
 
 // Only the app window may reach these. The sign-in windows render untrusted store
@@ -145,6 +177,7 @@ function registerPlatformHandlers(): void {
 }
 
 void app.whenReady().then(() => {
+  if (!isDev) serveApp()
   denyAllPermissions()
   applyContentSecurityPolicy()
   registerPlatformHandlers()
