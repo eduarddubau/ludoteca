@@ -3,9 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useLibrary } from './lib/store'
 import LibraryView from './LibraryView.vue'
 import MetadataView from './MetadataView.vue'
+import StoresView from './StoresView.vue'
 
 const library = useLibrary()
-const tab = ref<'library' | 'metadata'>('library')
+const tab = ref<'library' | 'metadata' | 'stores'>('library')
 
 onMounted(library.reload)
 
@@ -30,6 +31,7 @@ const runLabel = computed(() => {
             {{ library.unresolved.value.length }}
           </span>
         </button>
+        <button :class="{ on: tab === 'stores' }" @click="tab = 'stores'">Stores</button>
       </nav>
 
       <span v-if="runLabel" class="running" title="Metadata fetch in progress">
@@ -38,6 +40,7 @@ const runLabel = computed(() => {
     </header>
 
     <LibraryView v-if="tab === 'library'" />
-    <MetadataView v-else />
+    <MetadataView v-else-if="tab === 'metadata'" />
+    <StoresView v-else />
   </div>
 </template>

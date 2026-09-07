@@ -30,3 +30,7 @@ export {
   mergeLibrary, STATUS_LABEL, SHELF_LABEL, shelfOf,
   type LibraryEntry, type GameSource, type Shelf
 } from './library/merge.js'
+export {
+  STORE_PROFILES, tokenKey, canConnect, cooldownSeconds,
+  type StoreConnection, type ConnectionStatus, type StoreProfile
+} from './library/connections.js'

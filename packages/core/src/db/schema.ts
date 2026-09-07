@@ -1,5 +1,5 @@
 // Bump when SCHEMA changes so a shell opening an older file can tell.
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 
 // One row per game per store. The same title arriving from two stores stays two rows;
 // merging is a presentation concern, and a wrong merge is worse than a duplicate.
@@ -48,7 +48,9 @@ CREATE TABLE IF NOT EXISTS user_data (
 CREATE TABLE IF NOT EXISTS sync_state (
   store          TEXT PRIMARY KEY,
   last_synced_at TEXT,
-  last_error     TEXT
+  last_error     TEXT,
+  account_name   TEXT,
+  retry_after    TEXT
 );
 `
 

@@ -1,4 +1,4 @@
-import { type EditableField, type OwnedGame, type Platform, type PlayStatus, type StoreId, type UserData } from '@ludoteca/core'
+import { STORE_PROFILES, tokenKey, type EditableField, type StoreConnection, type OwnedGame, type Platform, type PlayStatus, type StoreId, type UserData } from '@ludoteca/core'
 
 interface GameRow {
   store: string
@@ -161,4 +161,68 @@ export async function deleteGame(platform: Platform, game: OwnedGame): Promise<v
     game.store,
     game.storeGameId
   ])
+}
+
+// ---- store connections
+
+interface SyncStateRow {
+  store: string
+  last_synced_at: string | null
+  last_error: string | null
+  account_name: string | null
+  retry_after: string | null
+}
+
+/**
+ * Connection status is observed, never assumed: a stored token means "connected" only
+ * until something proves otherwise, and an expired one is set by a failed refresh rather
+ * than inferred from a clock. Claiming connected while a token is dead is the classic
+ * failure in this kind of screen.
+ */
+export async function loadConnections(platform: Platform): Promise<Map<string, StoreConnection>> {
+  const rows = await platform.db.query<SyncStateRow>('SELECT * FROM sync_state')
+  const byStore = new Map(rows.map((row) => [row.store, row]))
+  const result = new Map<string, StoreConnection>()
+
+  for (const profile of STORE_PROFILES) {
+    const row = byStore.get(profile.store)
+    const hasToken = (await platform.secrets.get(tokenKey(profile.store))) !== null
+    result.set(profile.store, {
+      store: profile.store,
+      status: row?.last_error ? 'error' : hasToken ? 'connected' : 'disconnected',
+      accountName: row?.account_name ?? undefined,
+      lastSyncedAt: row?.last_synced_at ?? undefined,
+      lastError: row?.last_error ?? undefined,
+      retryAfter: row?.retry_after ?? undefined
+    })
+  }
+  return result
+}
+
+export async function saveConnection(
+  platform: Platform,
+  connection: StoreConnection
+): Promise<void> {
+  await platform.db.run(
+    `INSERT INTO sync_state (store, last_synced_at, last_error, account_name, retry_after)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(store) DO UPDATE SET
+       last_synced_at = excluded.last_synced_at,
+       last_error = excluded.last_error,
+       account_name = excluded.account_name,
+       retry_after = excluded.retry_after`,
+    [
+      connection.store,
+      connection.lastSyncedAt ?? null,
+      connection.lastError ?? null,
+      connection.accountName ?? null,
+      connection.retryAfter ?? null
+    ]
+  )
+}
+
+/** Clears the local token. Only the store itself can truly revoke a session. */
+export async function disconnectStore(platform: Platform, store: StoreId): Promise<void> {
+  await platform.secrets.delete(tokenKey(store))
+  await platform.db.run('DELETE FROM sync_state WHERE store = ?', [store])
 }

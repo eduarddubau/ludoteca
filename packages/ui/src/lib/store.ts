@@ -1,11 +1,15 @@
 import { computed, ref } from 'vue'
 import {
-  applyUserData, enrichLibrary, enrichWithAppId, gameKey, mergeLibrary, needsEnrichment,
-  reconcileImport,
-  type EditableField, type EnrichProgress, type LibraryEntry, type OwnedGame, type UserData
+  applyUserData, enrichLibrary, enrichWithAppId, gameKey, GogConnector, mergeLibrary,
+  needsEnrichment, reconcileImport,
+  type EditableField, type EnrichProgress, type LibraryEntry, type OwnedGame,
+  type StoreConnection, type StoreId, type UserData
 } from '@ludoteca/core'
 import { usePlatform } from '../platform'
-import { deleteGame, insertGame, loadGames, loadUserData, replaceGames, saveUserData } from './library'
+import {
+  deleteGame, disconnectStore, insertGame, loadConnections, loadGames, loadUserData,
+  replaceGames, saveConnection, saveUserData
+} from './library'
 
 // Module scope, deliberately: a component holding this would abandon the run the moment
 // the user switched tabs, which is exactly what an activity view must not do.
@@ -14,6 +18,8 @@ const progress = ref<EnrichProgress | null>(null)
 const enrichError = ref('')
 const abort = ref({ aborted: false })
 const userData = ref<Map<string, UserData>>(new Map())
+const connections = ref<Map<string, StoreConnection>>(new Map())
+const connecting = ref<StoreId | null>(null)
 
 const keyOf = (game: OwnedGame): string => `${game.store}:${game.storeGameId}`
 
@@ -57,7 +63,40 @@ export function useLibrary() {
   async function reload(): Promise<void> {
     const platform = usePlatform()
     userData.value = await loadUserData(platform)
+    connections.value = await loadConnections(platform)
     games.value = await loadGames(platform)
+  }
+
+  /**
+   * Runs a store's sign-in. Failures are recorded with a cooldown rather than left for
+   * the user to retry immediately — repeated sign-ins are what got a Steam account
+   * restricted, so the UI refuses to hammer a store that just said no.
+   */
+  async function connect(store: StoreId): Promise<void> {
+    const platform = usePlatform()
+    connecting.value = store
+    try {
+      if (store !== 'gog') throw new Error(`${store} sign-in is not implemented yet.`)
+      await new GogConnector(platform).authenticate()
+      await saveConnection(platform, { store, status: 'connected' })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      await saveConnection(platform, {
+        store,
+        status: 'error',
+        lastError: message,
+        retryAfter: new Date(Date.now() + 60_000).toISOString()
+      })
+    } finally {
+      connecting.value = null
+      connections.value = await loadConnections(platform)
+    }
+  }
+
+  async function disconnect(store: StoreId): Promise<void> {
+    const platform = usePlatform()
+    await disconnectStore(platform, store)
+    connections.value = await loadConnections(platform)
   }
 
   /** Import path: manually added rows survive unless the import now carries them. */
@@ -175,6 +214,7 @@ export function useLibrary() {
     games, applied, entries, hiddenEntries, editedKeys,
     untried, unresolved, resolved, coverage,
     importGames, entrySources, setHidden, setOverrides, addManual, removeGame,
+    connections, connecting, connect, disconnect,
     progress, enrichError, running,
     stop: () => (abort.value.aborted = true),
     reload, replaceAll, enrich, applyMatch
