@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import {
-  STORE_IDS, type EditableField, type LibraryEntry, type OwnedGame, type StoreId
+  STORE_IDS, STORE_LABEL,
+  type EditableField, type LibraryEntry, type OwnedGame, type StoreId
 } from '@ludoteca/core'
 
 const props = defineProps<{
@@ -12,7 +13,8 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   save: [changes: Partial<Record<EditableField, unknown>>]
-  add: [game: Pick<OwnedGame, 'title' | 'store' | 'playStatus'>]
+  add: [game: Pick<OwnedGame, 'title' | 'store' | 'playStatus'>, fetchMetadata: boolean]
+  refetch: [changes: Partial<Record<EditableField, unknown>>]
   remove: []
   close: []
 }>()
@@ -23,125 +25,94 @@ const manual = computed(() => props.sources.every((game) => game.addedManually))
 const title = ref(props.entry?.title ?? '')
 const store = ref<StoreId>(props.sources[0]?.store ?? 'steam')
 const played = ref(props.entry?.playStatus === 'played')
-const releaseYear = ref(props.entry?.releaseYear?.toString() ?? '')
-const developer = ref(props.entry?.developer ?? '')
-const publisher = ref(props.entry?.publisher ?? '')
-const criticScore = ref(props.entry?.criticScore?.toString() ?? '')
-const genres = ref(props.entry?.genres.join(', ') ?? '')
-const coverUrl = ref(props.entry?.coverUrl ?? '')
+const fetchMetadata = ref(true)
 
-const isEdited = (field: EditableField): boolean => props.editedFields.includes(field)
+const titleEdited = computed(() => props.editedFields.includes('title'))
+const trimmed = computed(() => title.value.trim())
+const titleChanged = computed(() => trimmed.value !== (props.entry?.title ?? ''))
+
+/** Empty unless the title moved, so a save never pins a field that did not change. */
+const changes = computed<Partial<Record<EditableField, unknown>>>(() =>
+  titleChanged.value ? { title: trimmed.value } : {}
+)
+
+const facts = computed(() => [
+  { label: 'Score', value: props.entry?.criticScore?.toString() },
+  { label: 'Released', value: props.entry?.releaseYear?.toString() },
+  { label: 'Genres', value: props.entry?.genres.join(', ') || undefined },
+  { label: 'Developer', value: props.entry?.developer },
+  { label: 'Publisher', value: props.entry?.publisher }
+])
 
 function submit(): void {
-  if (!title.value.trim()) return
-
+  if (!trimmed.value) return
   if (adding.value) {
-    emit('add', {
-      title: title.value.trim(),
-      store: store.value,
-      playStatus: played.value ? 'played' : 'unplayed'
-    })
+    emit(
+      'add',
+      { title: trimmed.value, store: store.value, playStatus: played.value ? 'played' : 'unplayed' },
+      fetchMetadata.value
+    )
     return
   }
-
-  // Only fields whose value actually moved become overrides. Sending them all would pin
-  // every field on the first save and freeze it against later refetches — the exact thing
-  // per-field overrides exist to avoid.
-  const changes: Partial<Record<EditableField, unknown>> = {}
-  const changed = (field: EditableField, next: unknown, before: unknown): void => {
-    if (next !== before) changes[field] = next
-  }
-
-  changed('title', title.value.trim(), props.entry?.title ?? '')
-  changed('genres', genres.value.split(',').map((g) => g.trim()).filter(Boolean).join(', '),
-    props.entry?.genres.join(', ') ?? '')
-  changed('developer', developer.value.trim(), props.entry?.developer ?? '')
-  changed('publisher', publisher.value.trim(), props.entry?.publisher ?? '')
-  changed('releaseYear', releaseYear.value, props.entry?.releaseYear?.toString() ?? '')
-  changed('criticScore', criticScore.value, props.entry?.criticScore?.toString() ?? '')
-  changed('coverUrl', coverUrl.value.trim(), props.entry?.coverUrl ?? '')
-
-  // Re-typed at the edge, so the comparison above can stay a plain string compare.
-  if ('genres' in changes) {
-    changes.genres = genres.value.split(',').map((g) => g.trim()).filter(Boolean)
-  }
-  if ('releaseYear' in changes) {
-    changes.releaseYear = releaseYear.value ? Number(releaseYear.value) : undefined
-  }
-  if ('criticScore' in changes) {
-    changes.criticScore = criticScore.value ? Number(criticScore.value) : undefined
-  }
-
-  emit('save', changes)
+  emit('save', changes.value)
 }
 </script>
 
 <template>
   <div class="panel editor">
-    <p class="editor-head">
-      <strong>{{ adding ? 'Add a game' : entry?.title }}</strong>
-      <span v-if="!adding && manual" class="muted"> — added by hand</span>
-    </p>
-
-    <div class="mapping">
-      <div class="row">
-        <label>Title</label>
-        <input v-model="title" type="text" :class="{ edited: isEdited('title') }" />
-      </div>
-
-      <template v-if="adding">
-        <div class="row">
-          <label>Store</label>
-          <select v-model="store">
-            <option v-for="id in STORE_IDS" :key="id" :value="id">{{ id }}</option>
-          </select>
-        </div>
-        <div class="row">
-          <label>Played</label>
-          <input v-model="played" type="checkbox" />
-        </div>
-      </template>
-
-      <template v-else>
-        <div class="row">
-          <label>Genres</label>
-          <input v-model="genres" type="text" placeholder="comma separated"
-                 :class="{ edited: isEdited('genres') }" />
-        </div>
-        <div class="row">
-          <label>Developer</label>
-          <input v-model="developer" type="text" :class="{ edited: isEdited('developer') }" />
-        </div>
-        <div class="row">
-          <label>Publisher</label>
-          <input v-model="publisher" type="text" :class="{ edited: isEdited('publisher') }" />
-        </div>
-        <div class="row">
-          <label>Release year</label>
-          <input v-model="releaseYear" type="number" :class="{ edited: isEdited('releaseYear') }" />
-        </div>
-        <div class="row">
-          <label>Score</label>
-          <input v-model="criticScore" type="number" min="0" max="100"
-                 :class="{ edited: isEdited('criticScore') }" />
-        </div>
-        <div class="row">
-          <label>Cover URL</label>
-          <input v-model="coverUrl" type="text" :class="{ edited: isEdited('coverUrl') }" />
-        </div>
-      </template>
+    <div class="editor-head">
+      <h2>{{ adding ? 'Add a game' : 'Edit game' }}</h2>
+      <span v-if="!adding && manual" class="tag">Added by hand</span>
     </div>
 
-    <p v-if="!adding" class="muted hint">
-      Edited fields are outlined. Clearing one returns it to whatever a fetch last found —
-      untouched fields keep updating on a refetch.
-    </p>
+    <div class="field">
+      <label for="editor-title">Title</label>
+      <input
+        id="editor-title"
+        v-model="title"
+        type="text"
+        autocomplete="off"
+        placeholder="Exact title, as the store spells it"
+        :class="{ edited: titleEdited }"
+      />
+      <p class="field-hint">
+        Metadata is matched on this. Correct it, then fetch again if the wrong game was found.
+      </p>
+    </div>
 
-    <div class="actions">
-      <button :disabled="!title.trim()" @click="submit">
-        {{ adding ? 'Add game' : 'Save changes' }}
+    <template v-if="adding">
+      <div class="field">
+        <label for="editor-store">Store</label>
+        <select id="editor-store" v-model="store">
+          <option v-for="id in STORE_IDS" :key="id" :value="id">{{ STORE_LABEL[id] }}</option>
+        </select>
+      </div>
+
+      <label class="check"><input v-model="played" type="checkbox" /> I have played this</label>
+      <label class="check">
+        <input v-model="fetchMetadata" type="checkbox" /> Fetch score, artwork and genres now
+      </label>
+    </template>
+
+    <div v-else class="facts">
+      <div v-for="fact in facts" :key="fact.label" class="fact">
+        <span class="fact-label">{{ fact.label }}</span>
+        <span :class="['fact-value', { missing: !fact.value }]">{{ fact.value ?? 'Not fetched' }}</span>
+      </div>
+      <p class="field-hint">
+        These come from the store and are not editable — a hand-typed score would not be true.
+      </p>
+    </div>
+
+    <div class="editor-actions">
+      <button class="primary" :disabled="!trimmed" @click="submit">
+        {{ adding ? 'Add game' : 'Save' }}
+      </button>
+      <button v-if="!adding" :disabled="!trimmed" @click="emit('refetch', changes)">
+        Fetch metadata
       </button>
       <button @click="emit('close')">Cancel</button>
+      <span class="grow" />
       <button v-if="!adding && manual" class="danger" @click="emit('remove')">
         Delete permanently
       </button>

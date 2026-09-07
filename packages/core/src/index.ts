@@ -5,7 +5,7 @@ export type {
 export type {
   StoreId, Ownership, OwnedGame, PlayStatus, StoreConnector, AuthResultSummary
 } from './connectors/types.js'
-export { STORE_IDS } from './connectors/types.js'
+export { STORE_IDS, STORE_LABEL } from './connectors/types.js'
 export {
   applyUserData, reconcileImport, preserveEnrichment, gameKey, EDITABLE_FIELDS,
   type UserData, type EditableField

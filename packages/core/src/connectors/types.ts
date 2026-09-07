@@ -3,6 +3,13 @@ export type StoreId = 'steam' | 'gog' | 'epic' | 'other'
 
 export const STORE_IDS: StoreId[] = ['steam', 'gog', 'epic', 'other']
 
+export const STORE_LABEL: Record<StoreId, string> = {
+  steam: 'Steam',
+  gog: 'GOG',
+  epic: 'Epic',
+  other: 'Other'
+}
+
 /** Family-shared titles are playable but not owned, and only one member at a time. */
 export type Ownership =
   | { kind: 'owned' }

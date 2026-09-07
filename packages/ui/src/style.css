@@ -444,6 +444,39 @@ td.col-hours, td.col-releaseYear { text-align: right; }
 .col-actions { width: 1%; white-space: nowrap; }
 .col-actions button { margin-left: 4px; }
 
+.editor { max-width: 560px; }
+.editor-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.editor-head h2 { margin: 0; font-size: 16px; }
+.tag {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #2b2f38;
+  color: var(--muted);
+}
+.field { margin-bottom: 14px; }
+.field label { display: block; margin-bottom: 5px; font-size: 13px; color: var(--muted); }
+.field input[type='text'],
+.field select { width: 100%; }
+.field-hint { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.check { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; }
+.check input { margin: 0; }
+.facts {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: #0f1116;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.fact { display: flex; gap: 12px; padding: 3px 0; font-size: 13px; }
+.fact-label { width: 90px; flex: none; color: var(--muted); }
+.fact-value { overflow: hidden; text-overflow: ellipsis; }
+.fact-value.missing { color: var(--muted); font-style: italic; }
+.facts .field-hint { margin-top: 10px; }
+.editor-actions { display: flex; align-items: center; gap: 8px; }
+.editor-actions .grow { flex: 1; }
+button.primary { border-color: var(--accent); color: var(--accent); }
+
 /* Fields the user has overridden, so they are distinguishable from synced values. */
 .editor input.edited, .editor select.edited { border-color: var(--accent); }
 .editor .hint { margin: 10px 0 0; font-size: 12px; }

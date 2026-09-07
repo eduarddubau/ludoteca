@@ -1,3 +1,4 @@
+import { STORE_LABEL } from '../connectors/types.js'
 import type { OwnedGame, PlayStatus, StoreId } from '../connectors/types.js'
 
 /** Where one entry is owned, kept per-store so links and playtime stay attributable. */
@@ -36,11 +37,8 @@ export function shelfOf(status: PlayStatus): Shelf {
 export type StoreFacet = StoreId | 'steam:shared'
 
 export const FACET_LABEL: Record<StoreFacet, string> = {
-  steam: 'Steam',
-  'steam:shared': 'Steam (shared)',
-  gog: 'GOG',
-  epic: 'Epic',
-  other: 'Other'
+  ...STORE_LABEL,
+  'steam:shared': 'Steam (shared)'
 }
 
 export interface LibraryEntry {

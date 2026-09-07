@@ -150,14 +150,29 @@ async function saveEdits(changes: Partial<Record<EditableField, unknown>>): Prom
   editing.value = null
 }
 
-async function addGame(game: Pick<OwnedGame, 'title' | 'store' | 'playStatus'>): Promise<void> {
-  await library.addManual({
+async function addGame(
+  game: Pick<OwnedGame, 'title' | 'store' | 'playStatus'>,
+  fetchMetadata: boolean
+): Promise<void> {
+  const added: OwnedGame = {
     ...game,
     storeGameId: `manual-${crypto.randomUUID()}`,
     ownership: { kind: 'owned' },
     genres: []
-  })
+  }
+  await library.addManual(added)
   adding.value = false
+  if (fetchMetadata) await library.enrich([added], true)
+}
+
+async function refetchEditing(changes: Partial<Record<EditableField, unknown>>): Promise<void> {
+  const entry = editing.value
+  const target = editingSources.value[0]
+  if (!entry || !target) return
+  const searchTitle = (changes.title as string | undefined) ?? entry.title
+  if (Object.keys(changes).length) await library.setOverrides(target, changes)
+  editing.value = null
+  await enrichOne(entry, searchTitle)
 }
 
 async function removeEditing(): Promise<void> {
@@ -185,12 +200,14 @@ function exportAs(format: 'csv' | 'json'): void {
 }
 
 /** Per-entry fetch: enriches every store row behind it. */
-async function enrichOne(entry: LibraryEntry): Promise<void> {
+// searchTitle is passed explicitly after a rename: `entry` is captured before the
+// override lands, so reading entry.title here would look the old name up again.
+async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promise<void> {
   const keys = new Set(entry.sources.map((s) => `${s.store}:${s.storeGameId}`))
-  await library.enrich(
-    library.games.value.filter((g) => keys.has(`${g.store}:${g.storeGameId}`)),
-    true
-  )
+  const targets = library.games.value
+    .filter((g) => keys.has(`${g.store}:${g.storeGameId}`))
+    .map((game) => ({ ...game, title: searchTitle }))
+  await library.enrich(targets, true)
 }
 </script>
 
@@ -254,6 +271,7 @@ async function enrichOne(entry: LibraryEntry): Promise<void> {
       :sources="editingSources"
       :edited-fields="editingEdited"
       @save="saveEdits"
+      @refetch="refetchEditing"
       @remove="removeEditing"
       @close="editing = null"
     />

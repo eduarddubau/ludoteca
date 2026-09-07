@@ -83,7 +83,7 @@ function since(iso: string | undefined): string {
           {{ connectionFor(profile.store).lastError }}
         </p>
 
-        <div v-if="profile.connectable" class="actions">
+        <div class="actions">
           <button
             v-if="connectionFor(profile.store).status !== 'connected'"
             :disabled="
