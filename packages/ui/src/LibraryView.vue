@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import {
-  fromJson, parseCsv, sampleLibrary, SHELF_LABEL, suggestMapping, toCsv, toJson,
+  FACET_LABEL, fromJson, parseCsv, sampleLibrary, SHELF_LABEL, suggestMapping, toCsv,
+  toJson,
   type ColumnMapping, type EditableField, type LibraryEntry, type OwnedGame,
-  type ParsedCsv, type Shelf, type StoreId
+  type ParsedCsv, type Shelf, type StoreFacet
 } from '@ludoteca/core'
 import { useLibrary } from './lib/store'
 import { SORT_OPTIONS, sortEntries, type SortKey } from './lib/sort'
@@ -16,7 +17,7 @@ import GameEditor from './components/GameEditor.vue'
 const library = useLibrary()
 
 const search = ref('')
-const stores = ref<Set<StoreId>>(new Set())
+const stores = ref<Set<StoreFacet>>(new Set())
 const shelves = ref<Set<Shelf>>(new Set())
 const genres = ref<Set<string>>(new Set())
 const developers = ref<Set<string>>(new Set())
@@ -35,7 +36,10 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const pendingCsv = ref<{ parsed: ParsedCsv; suggested: ColumnMapping } | null>(null)
 const importError = ref('')
 
-const storeOptions = computed(() => [...new Set(library.games.value.map((g) => g.store))].sort())
+// Only facets actually present, so an empty "Steam (shared)" chip never appears.
+const storeOptions = computed(() =>
+  [...new Set(library.entries.value.flatMap((entry) => entry.facets))].sort()
+)
 const shelfOptions: Shelf[] = ['played', 'backlog']
 
 // Ordered by how many games carry each, so the useful ones are not buried under one-offs.
@@ -59,7 +63,7 @@ const visible = computed(() => {
   const needle = search.value.trim().toLowerCase()
   const filtered = source.value.filter(
     (entry) =>
-      (stores.value.size === 0 || entry.stores.some((s) => stores.value.has(s))) &&
+      (stores.value.size === 0 || entry.facets.some((f) => stores.value.has(f))) &&
       (shelves.value.size === 0 || shelves.value.has(entry.shelf)) &&
       (genres.value.size === 0 || entry.genres.some((g) => genres.value.has(g))) &&
       (developers.value.size === 0 ||
@@ -270,7 +274,7 @@ async function enrichOne(entry: LibraryEntry): Promise<void> {
         :class="{ on: stores.has(store) }"
         @click="stores = toggled(stores, store)"
       >
-        {{ store }}
+        {{ FACET_LABEL[store] }}
       </button>
 
       <span class="muted spacer">Shelf</span>

@@ -7,6 +7,7 @@ export interface GameSource {
   storeUrl?: string
   playtimeMinutes?: number
   playStatus: PlayStatus
+  shared: boolean
 }
 
 /** One game, however many stores sell it. Built for display; the database keeps rows. */
@@ -27,10 +28,27 @@ export function shelfOf(status: PlayStatus): Shelf {
   return status === 'played' ? 'played' : 'backlog'
 }
 
+/**
+ * What the store filter offers. Shared games are Steam games — ownership is the
+ * dimension, not the store — but they are worth filtering apart, so the facet is derived
+ * from ownership rather than by inventing a store that cannot be connected to.
+ */
+export type StoreFacet = StoreId | 'steam:shared'
+
+export const FACET_LABEL: Record<StoreFacet, string> = {
+  steam: 'Steam',
+  'steam:shared': 'Steam (shared)',
+  gog: 'GOG',
+  epic: 'Epic',
+  other: 'Other'
+}
+
 export interface LibraryEntry {
   key: string
   title: string
   stores: StoreId[]
+  /** Store filter values, splitting owned from family-shared. */
+  facets: StoreFacet[]
   sources: GameSource[]
   /** Kept alongside `shelf` so the finer distinction stays recoverable. */
   playStatus: PlayStatus
@@ -81,7 +99,8 @@ export function mergeLibrary(games: OwnedGame[]): LibraryEntry[] {
       storeGameId: game.storeGameId,
       storeUrl: game.storeUrl,
       playtimeMinutes: game.playtimeMinutes,
-      playStatus: game.playStatus
+      playStatus: game.playStatus,
+      shared: game.ownership.kind === 'familyShared'
     }))
 
     const played = sources
@@ -95,6 +114,13 @@ export function mergeLibrary(games: OwnedGame[]): LibraryEntry[] {
       key,
       title: group[0].title,
       stores: [...new Set(sources.map((s) => s.store))].sort(),
+      facets: [
+        ...new Set(
+          sources.map((s): StoreFacet =>
+            s.store === 'steam' && s.shared ? 'steam:shared' : s.store
+          )
+        )
+      ].sort(),
       sources,
       playStatus: mergeStatus(sources),
       shelf: shelfOf(mergeStatus(sources)),

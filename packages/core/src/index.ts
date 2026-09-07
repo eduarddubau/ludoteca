@@ -30,8 +30,8 @@ export {
 export { toCsv, toJson } from './export/csv.js'
 export { fromJson } from './import/json.js'
 export {
-  mergeLibrary, STATUS_LABEL, SHELF_LABEL, shelfOf,
-  type LibraryEntry, type GameSource, type Shelf
+  mergeLibrary, STATUS_LABEL, SHELF_LABEL, FACET_LABEL, shelfOf,
+  type LibraryEntry, type GameSource, type Shelf, type StoreFacet
 } from './library/merge.js'
 export {
   STORE_PROFILES, tokenKey, canConnect, cooldownSeconds,
