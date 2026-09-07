@@ -1,9 +1,81 @@
-import { app, BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
-import { authenticate, cookies, database, http, secrets, type SerializedPattern } from './platform.js'
+import { pathToFileURL } from 'node:url'
+import {
+  authenticate, cookies, database, http, secrets, STORE_PARTITION, type SerializedPattern
+} from './platform.js'
 import type { HttpRequest } from '@ludoteca/core'
 
 const isDev = process.env['LUDOTECA_DEV'] === '1'
+const DEV_URL = 'http://localhost:5173'
+
+const appIndex = join(__dirname, '../../../../packages/ui/dist/index.html')
+const appOrigin = isDev ? DEV_URL : pathToFileURL(appIndex).href
+
+/**
+ * `store_url` and `metacritic_url` are import columns, so their scheme is whatever a
+ * file said it was. shell.openExternal hands that to the OS handler, which is how a
+ * library file turns into arbitrary local execution.
+ */
+function openExternally(raw: string): void {
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return
+  void shell.openExternal(parsed.href)
+}
+
+/**
+ * The app window passes the IPC sender check, so letting it navigate anywhere would hand
+ * a remote page the whole preload surface — database and keychain included.
+ */
+function confineToApp(window: BrowserWindow): void {
+  window.webContents.on('will-navigate', (event, next) => {
+    if (next === appOrigin || next.startsWith(`${appOrigin}#`) || next.startsWith(`${appOrigin}?`)) {
+      return
+    }
+    event.preventDefault()
+    openExternally(next)
+  })
+}
+
+// Nothing here needs a camera, a location or notifications; the sign-in windows render
+// store pages that may well ask.
+function denyAllPermissions(): void {
+  const deny = (): boolean => false
+  for (const partition of [session.defaultSession, session.fromPartition(STORE_PARTITION)]) {
+    partition.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
+    partition.setPermissionCheckHandler(deny)
+  }
+}
+
+/**
+ * Covers is the only remote content the app window loads; everything else it needs comes
+ * over IPC. Dev additionally serves the bundle and its socket from the Vite origin.
+ */
+function applyContentSecurityPolicy(): void {
+  const policy = [
+    "default-src 'self'",
+    isDev ? `script-src 'self' 'unsafe-inline' ${DEV_URL}` : "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' https: data:",
+    isDev ? `connect-src 'self' ${DEV_URL} ws://localhost:5173` : "connect-src 'self'",
+    "font-src 'self' data:",
+    "object-src 'none'",
+    "frame-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'"
+  ].join('; ')
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [policy] }
+    })
+  })
+}
 
 // Every window this app opened. The metadata window is a second one, and IPC must
 // accept it while still refusing the sign-in windows, which render store pages.
@@ -29,14 +101,15 @@ function createWindow(): void {
   window.on('closed', () => ownWindowIds.delete(windowId))
 
   window.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    openExternally(url)
     return { action: 'deny' }
   })
+  confineToApp(window)
 
   if (isDev) {
-    void window.loadURL('http://localhost:5173')
+    void window.loadURL(DEV_URL)
   } else {
-    void window.loadFile(join(__dirname, '../../../../packages/ui/dist/index.html'))
+    void window.loadFile(appIndex)
   }
 }
 
@@ -72,6 +145,8 @@ function registerPlatformHandlers(): void {
 }
 
 void app.whenReady().then(() => {
+  denyAllPermissions()
+  applyContentSecurityPolicy()
   registerPlatformHandlers()
   createWindow()
 

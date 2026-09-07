@@ -15,7 +15,7 @@ export interface SerializedPattern {
 // Deliberately not 'persist:' — Electron would write the session cookie jar to disk
 // unencrypted, next to a UI that promises credentials live in the OS keychain. The
 // durable copy is what a connector puts in `secrets`; this partition is scratch.
-const STORE_PARTITION = 'stores'
+export const STORE_PARTITION = 'stores'
 
 // Opened on first use, not at import: app paths are only meaningful once Electron owns
 // the process, and a failure here should surface at a call site rather than at load.
@@ -102,7 +102,35 @@ export async function authenticate(
     height: 760,
     title: title ?? 'Sign in',
     autoHideMenuBar: true,
-    webPreferences: { partition: STORE_PARTITION, sandbox: true }
+    // Spelled out rather than left to defaults: this is the one window that renders a
+    // page we do not control. No preload, so nothing of ours is reachable from it.
+    webPreferences: {
+      partition: STORE_PARTITION,
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true
+    }
+  })
+
+  // Social sign-in opens popups, and sending them to the system browser would land them
+  // in a different cookie jar, so the flow could never complete. They stay in this
+  // partition with the same restrictions instead.
+  authWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (!url.startsWith('https:')) return { action: 'deny' }
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        autoHideMenuBar: true,
+        webPreferences: {
+          partition: STORE_PARTITION,
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          webSecurity: true
+        }
+      }
+    }
   })
 
   return new Promise((resolve, reject) => {
