@@ -5,7 +5,9 @@ import type { HttpRequest } from '@ludoteca/core'
 
 const isDev = process.env['LUDOTECA_DEV'] === '1'
 
-let appWindowId: number | undefined
+// Every window this app opened. The metadata window is a second one, and IPC must
+// accept it while still refusing the sign-in windows, which render store pages.
+const ownWindowIds = new Set<number>()
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -20,7 +22,11 @@ function createWindow(): void {
     }
   })
 
-  appWindowId = window.webContents.id
+  // Captured now: by the time 'closed' fires the window is destroyed and reading
+  // webContents off it throws "Object has been destroyed".
+  const windowId = window.webContents.id
+  ownWindowIds.add(windowId)
+  window.on('closed', () => ownWindowIds.delete(windowId))
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
@@ -41,8 +47,8 @@ function handle<A extends unknown[], R>(
   fn: (...args: A) => Promise<R>
 ): void {
   ipcMain.handle(channel, (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-    if (event.sender.id !== appWindowId) {
-      throw new Error(`Refused ${channel}: sender is not the application window.`)
+    if (!ownWindowIds.has(event.sender.id)) {
+      throw new Error(`Refused ${channel}: sender is not an application window.`)
     }
     return fn(...(args as A))
   })
