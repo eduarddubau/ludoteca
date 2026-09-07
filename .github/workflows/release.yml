@@ -7,11 +7,20 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# Read by default; only the job that publishes gets write. The build job runs npm
+# install scripts and electron-builder's downloads, which is the last code that should
+# be holding a token that can rewrite the repository.
 permissions:
-  contents: write
+  contents: read
+
+# One release at a time: two tags pushed close together would otherwise race.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -33,12 +42,10 @@ jobs:
 
       - run: npm ci
 
-      - name: Verify the toolchain survived install
-        shell: bash
-        run: |
-          node -e "require('electron')" >/dev/null 2>&1 || true
-          test -d node_modules/electron/dist || test -f node_modules/electron/dist/electron.exe || {
-            echo "Electron binary missing — its postinstall did not run."; exit 1; }
+      # Must precede typecheck: packages/ui resolves @ludoteca/core to dist/index.d.ts,
+      # which a fresh checkout has not built yet. Verified by deleting core/dist locally
+      # — vue-tsc fails with "Cannot find module '@ludoteca/core'".
+      - run: npm run build
 
       - run: npm run typecheck
       - run: npm run lint
@@ -72,6 +79,9 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -84,12 +94,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
           find artifacts -type f -print
           cat artifacts/*/SHA256SUMS-*.txt > SHA256SUMS.txt
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "${GITHUB_REF_NAME}" \
-            --notes "Unsigned builds. Verify against SHA256SUMS.txt before running.
 
-          Windows will show a SmartScreen warning because the executable is not signed: More info -> Run anyway. That warning is accurate — check the checksum first." \
-            SHA256SUMS.txt \
-            $(find artifacts -type f \( -name '*.AppImage' -o -name '*.rpm' -o -name '*.exe' \))
+          # An array, not unquoted $(...): productName is config, and the day it gains a
+          # space the split would upload the wrong paths silently.
+          mapfile -t assets < <(
+            find artifacts -type f \( -name '*.AppImage' -o -name '*.rpm' -o -name '*.exe' \)
+          )
+          [ ${#assets[@]} -gt 0 ] || { echo "No artifacts to publish."; exit 1; }
+
+          notes=$(cat <<'TXT'
+          Unsigned builds. Verify against SHA256SUMS.txt before running.
+
+          Windows shows a SmartScreen warning because the executable is not signed:
+          More info -> Run anyway. That warning is accurate — check the checksum first.
+
+          Linux: the AppImage needs FUSE 2, which current Fedora does not install by
+          default. Use the rpm there, or run the AppImage with --appimage-extract-and-run.
+          TXT
+          )
+
+          # create is not idempotent, so a re-run of the same tag would fail outright.
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" --clobber SHA256SUMS.txt "${assets[@]}"
+          else
+            gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" \
+              --notes "${notes}" SHA256SUMS.txt "${assets[@]}"
+          fi
