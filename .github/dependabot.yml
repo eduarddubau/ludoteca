@@ -1,0 +1,18 @@
+# Pinned SHAs are immutable but they do not age well on their own: this workflow sat on
+# @v4 through three major releases and only a runtime deprecation warning surfaced it.
+# Dependabot bumps the SHA and the version comment beside it together.
+#
+# Note the trade this accepts. GitHub does not raise vulnerability *alerts* for actions
+# pinned to a SHA — only for semver ranges — so these version updates are the whole
+# mechanism, not a supplement to alerting.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']
