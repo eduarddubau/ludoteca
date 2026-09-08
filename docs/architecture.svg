@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 620" width="1100" height="620" role="img" aria-labelledby="t d">
+  <title id="t">Ludoteca architecture</title>
+  <desc id="d">The Vue console and the core library are framework- and shell-agnostic: a lint rule makes importing Electron, better-sqlite3 or a Node built-in a build error. Both reach the outside world only through Platform, a contract of five members — authenticate, cookies, http, db and secrets. The Electron shell implements each one: a sign-in window, a scratch cookie partition, https-only fetch, SQLite and the OS keychain. A Tauri shell is the planned second implementation over the same UI. Store sign-in renders in its own window with no preload, and hands back only a redirect URL and cookies.</desc>
+
+  <rect width="1100" height="620" rx="18" fill="#12141a"/>
+  <rect x="0.5" y="0.5" width="1099" height="619" rx="18" fill="none" stroke="rgba(255,255,255,0.08)"/>
+
+  <g font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+
+    <text x="40" y="46" fill="#e6e8ec" font-size="17" font-weight="600">Ludoteca</text>
+    <text x="122" y="46" fill="#6a7180" font-size="13">one UI, more than one shell</text>
+
+    <!-- shell-agnostic side -->
+    <rect x="40" y="76" width="250" height="300" rx="12" fill="none" stroke="#2b2f38" stroke-dasharray="4 4"/>
+    <text x="56" y="99" fill="#6a7180" font-size="11" letter-spacing="0.08em">NO SHELL APIS</text>
+
+    <rect x="56" y="112" width="218" height="86" rx="9" fill="#1c1f26" stroke="#343a45"/>
+    <text x="72" y="136" fill="#e6e8ec" font-size="14" font-weight="600">packages/ui</text>
+    <text x="72" y="156" fill="#9aa1ad" font-size="12">Vue 3 console</text>
+    <text x="72" y="176" fill="#6a7180" font-size="11.5">grid · list · filters · sorting</text>
+    <text x="72" y="191" fill="#6a7180" font-size="11.5">metadata run · stores tab</text>
+
+    <rect x="56" y="212" width="218" height="106" rx="9" fill="#1c1f26" stroke="#343a45"/>
+    <text x="72" y="236" fill="#e6e8ec" font-size="14" font-weight="600">packages/core</text>
+    <text x="72" y="256" fill="#9aa1ad" font-size="12">plain TypeScript</text>
+    <text x="72" y="276" fill="#6a7180" font-size="11.5">store connectors · merge</text>
+    <text x="72" y="291" fill="#6a7180" font-size="11.5">enrichment · import / export</text>
+    <text x="72" y="306" fill="#6a7180" font-size="11.5">per-field overrides</text>
+
+    <text x="56" y="344" fill="#6a7180" font-size="11">Importing electron, better-sqlite3</text>
+    <text x="56" y="359" fill="#6a7180" font-size="11">or a Node built-in is a lint error.</text>
+
+    <!-- the seam -->
+    <rect x="340" y="112" width="196" height="264" rx="12" fill="#161a21" stroke="#6f9ef8"/>
+    <text x="358" y="140" fill="#6f9ef8" font-size="14" font-weight="600">Platform</text>
+    <text x="358" y="159" fill="#9aa1ad" font-size="11.5">the only seam</text>
+
+    <g font-size="12.5" fill="#d5e2ff">
+      <rect x="358" y="174" width="160" height="30" rx="7" fill="#1c2331" stroke="#3b4a63"/>
+      <text x="372" y="194">authenticate</text>
+      <rect x="358" y="212" width="160" height="30" rx="7" fill="#1c2331" stroke="#3b4a63"/>
+      <text x="372" y="232">cookies</text>
+      <rect x="358" y="250" width="160" height="30" rx="7" fill="#1c2331" stroke="#3b4a63"/>
+      <text x="372" y="270">http</text>
+      <rect x="358" y="288" width="160" height="30" rx="7" fill="#1c2331" stroke="#3b4a63"/>
+      <text x="372" y="308">db</text>
+      <rect x="358" y="326" width="160" height="30" rx="7" fill="#1c2331" stroke="#3b4a63"/>
+      <text x="372" y="346">secrets</text>
+    </g>
+
+    <!-- shells -->
+    <rect x="586" y="112" width="238" height="264" rx="12" fill="#1c1f26" stroke="#343a45"/>
+    <text x="604" y="140" fill="#e6e8ec" font-size="14" font-weight="600">apps/electron</text>
+    <text x="604" y="159" fill="#9aa1ad" font-size="11.5">main process + preload bridge</text>
+    <g font-size="11.5" fill="#9aa1ad">
+      <text x="604" y="194">sign-in window, no preload</text>
+      <text x="604" y="232">scratch cookie partition</text>
+      <text x="604" y="270">net.fetch — https only</text>
+      <text x="604" y="308">SQLite (better-sqlite3)</text>
+      <text x="604" y="346">safeStorage → OS keychain</text>
+    </g>
+
+    <rect x="586" y="396" width="238" height="52" rx="12" fill="none" stroke="#343a45" stroke-dasharray="5 4"/>
+    <text x="604" y="420" fill="#6a7180" font-size="13" font-weight="600">apps/tauri</text>
+    <text x="604" y="438" fill="#6a7180" font-size="11.5">planned — the same UI, proving the seam</text>
+
+    <!-- outside -->
+    <rect x="872" y="112" width="188" height="76" rx="9" fill="#161a21" stroke="#343a45"/>
+    <text x="888" y="136" fill="#e6e8ec" font-size="13" font-weight="600">Steam · GOG · Epic</text>
+    <text x="888" y="155" fill="#6a7180" font-size="11.5">reverse-engineered, https</text>
+    <text x="888" y="172" fill="#e4c65b" font-size="11.5">no live sign-in yet</text>
+
+    <rect x="872" y="204" width="188" height="58" rx="9" fill="#161a21" stroke="#343a45"/>
+    <text x="888" y="228" fill="#e6e8ec" font-size="13" font-weight="600">ludoteca.db</text>
+    <text x="888" y="247" fill="#6a7180" font-size="11.5">local, shell-independent</text>
+
+    <rect x="872" y="278" width="188" height="58" rx="9" fill="#161a21" stroke="#343a45"/>
+    <text x="888" y="302" fill="#e6e8ec" font-size="13" font-weight="600">OS keychain</text>
+    <text x="888" y="321" fill="#6a7180" font-size="11.5">tokens, never a plain file</text>
+
+    <!-- arrows -->
+    <g stroke="#48505e" stroke-width="1.5" fill="none" marker-end="url(#a)">
+      <path d="M274 155 H 330"/>
+      <path d="M274 265 H 330"/>
+      <path d="M536 244 H 578"/>
+      <path d="M824 150 H 866"/>
+      <path d="M824 233 H 866"/>
+      <path d="M824 307 H 866"/>
+    </g>
+
+    <!-- sign-in isolation -->
+    <rect x="40" y="472" width="1020" height="106" rx="12" fill="#161a21" stroke="#343a45"/>
+    <text x="60" y="500" fill="#6ec664" font-size="13" font-weight="600">Sign-in is quarantined</text>
+    <text x="60" y="524" fill="#9aa1ad" font-size="12">The store's own login page renders in a separate window: no preload, its own cookie partition, sandbox and context isolation spelled out</text>
+    <text x="60" y="543" fill="#9aa1ad" font-size="12">rather than inherited. It hands back only a redirect URL and that session's cookies. IPC handlers check which window is asking, so a store</text>
+    <text x="60" y="562" fill="#9aa1ad" font-size="12">page cannot reach the bridge even though it is an Electron window too.</text>
+  </g>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#48505e"/>
+    </marker>
+  </defs>
+</svg>
