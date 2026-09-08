@@ -112,7 +112,7 @@ export class GogConnector implements StoreConnector {
     const games: OwnedGame[] = []
 
     let page = 1
-    let totalPages = 1
+    let totalPages: number
 
     do {
       const body = await storeJson<ProductsPage>(this.platform, 'GOG', {
