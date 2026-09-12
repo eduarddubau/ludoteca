@@ -107,7 +107,7 @@ async function applyPick(appId: number): Promise<void> {
       Everything has been looked up, and nothing needs resolving by hand.
     </p>
     <p v-else-if="!library.games.value.length" class="muted panel">
-      Import a library first — there is nothing to fetch metadata for yet.
+      Import a library from Settings first — there is nothing to fetch metadata for yet.
     </p>
   </div>
 </template>

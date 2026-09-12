@@ -1,20 +1,19 @@
 <script setup lang="ts">
 import { computed, ref, watch, type Ref } from 'vue'
 import {
-  FACET_LABEL, fromJson, parseCsv, PLATFORM_LABEL, sampleLibrary, SHELF_LABEL,
-  suggestMapping, toCsv, toJson,
-  type ColumnMapping, type EditableField, type ExportedGame, type GamePlatform,
-  type LibraryEntry, type OwnedGame, type ParsedCsv, type Shelf, type StoreFacet
+  FACET_LABEL, PLATFORM_LABEL, SHELF_LABEL,
+  type EditableField, type GamePlatform, type LibraryEntry, type OwnedGame,
+  type Shelf, type StoreFacet
 } from '@ludoteca/core'
 import { useLibrary } from './lib/store'
 import { SORT_OPTIONS, sortEntries, type SortKey } from './lib/sort'
 import LibraryTable from './components/LibraryTable.vue'
 import LibraryGrid from './components/LibraryGrid.vue'
-import MappingPanel from './components/MappingPanel.vue'
 import FilterMenu from './components/FilterMenu.vue'
 import GameEditor from './components/GameEditor.vue'
 
 const library = useLibrary()
+const emit = defineEmits<{ navigate: [tab: 'settings'] }>()
 
 const search = ref('')
 const stores = ref<Set<StoreFacet>>(new Set())
@@ -23,7 +22,6 @@ const shelves = ref<Set<Shelf>>(new Set())
 const genres = ref<Set<string>>(new Set())
 const developers = ref<Set<string>>(new Set())
 const publishers = ref<Set<string>>(new Set())
-const exportMenu = ref(false)
 
 const view = ref<'grid' | 'list'>('grid')
 const sortKey = ref<SortKey>('criticScore')
@@ -35,10 +33,6 @@ const adding = ref(false)
 const preview = ref<OwnedGame | null>(null)
 const fetching = ref(false)
 const fetchError = ref('')
-
-const fileInput = ref<HTMLInputElement | null>(null)
-const pendingCsv = ref<{ parsed: ParsedCsv; suggested: ColumnMapping } | null>(null)
-const importError = ref('')
 
 const source = computed(() =>
   showHidden.value ? library.hiddenEntries.value : library.entries.value
@@ -124,32 +118,6 @@ function onSort(key: SortKey): void {
   }
 }
 
-async function onFileChosen(event: Event): Promise<void> {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-
-  importError.value = ''
-  try {
-    const text = await file.text()
-    if (file.name.toLowerCase().endsWith('.json') || text.trimStart().startsWith('[')) {
-      await confirmImport(fromJson(text))
-      return
-    }
-    const parsed = parseCsv(text)
-    if (!parsed.rows.length) throw new Error('No rows found in that file.')
-    pendingCsv.value = { parsed, suggested: suggestMapping(parsed) }
-  } catch (err) {
-    importError.value = err instanceof Error ? err.message : String(err)
-  }
-}
-
-async function confirmImport(next: ExportedGame[]): Promise<void> {
-  await library.importGames(next)
-  pendingCsv.value = null
-}
-
 const editingSources = computed(() =>
   editing.value ? library.entrySources(editing.value) : []
 )
@@ -231,38 +199,6 @@ async function removeEditing(): Promise<void> {
   closeEditor()
 }
 
-function download(filename: string, contents: string, mime: string): void {
-  const url = URL.createObjectURL(new Blob([contents], { type: mime }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  URL.revokeObjectURL(url)
-}
-
-/** Whole library, not the filtered view: a filter silently dropping rows from a backup
- *  — hidden games included — is how a restore comes back short. */
-function backup(): ExportedGame[] {
-  return library.games.value.map((game) => {
-    const user = library.userDataFor(game)
-    return {
-      ...game,
-      hidden: user.hidden,
-      ...(Object.keys(user.overrides).length ? { overrides: user.overrides } : {})
-    }
-  })
-}
-
-function exportAs(format: 'csv' | 'json'): void {
-  exportMenu.value = false
-  const stamp = new Date().toISOString().slice(0, 10)
-  if (format === 'csv') {
-    download(`ludoteca-${stamp}.csv`, toCsv(backup()), 'text/csv;charset=utf-8')
-  } else {
-    download(`ludoteca-${stamp}.json`, toJson(backup()), 'application/json')
-  }
-}
-
 /** Per-entry fetch: enriches every store row behind it. */
 // searchTitle is passed explicitly after a rename: `entry` is captured before the
 // override lands, so reading entry.title here would look the old name up again.
@@ -293,33 +229,9 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
       </div>
 
       <div class="group">
-        <button @click="fileInput?.click()">Import…</button>
-        <div class="menu-anchor">
-          <button :disabled="!library.games.value.length" @click="exportMenu = !exportMenu">
-            Export… ({{ library.games.value.length }})
-          </button>
-          <div v-if="exportMenu" class="menu-backdrop" @click="exportMenu = false" />
-          <div v-if="exportMenu" class="menu">
-            <button @click="exportAs('csv')">CSV</button>
-            <button @click="exportAs('json')">JSON</button>
-          </div>
-        </div>
         <button @click="closeEditor(); adding = true">Add game…</button>
-        <button v-if="!library.games.value.length" @click="library.replaceAll(sampleLibrary())">
-          Sample data
-        </button>
       </div>
     </div>
-
-    <input
-      ref="fileInput"
-      type="file"
-      accept=".csv,.json,text/csv,application/json"
-      hidden
-      @change="onFileChosen"
-    />
-
-    <p v-if="importError" class="panel error">{{ importError }}</p>
 
     <GameEditor
       v-if="adding"
@@ -347,14 +259,6 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
       @refetch="refetchEditing"
       @remove="removeEditing"
       @close="closeEditor"
-    />
-
-    <MappingPanel
-      v-if="pendingCsv"
-      :parsed="pendingCsv.parsed"
-      :suggested="pendingCsv.suggested"
-      @confirm="confirmImport"
-      @cancel="pendingCsv = null"
     />
 
     <div v-if="library.games.value.length" class="filters">
@@ -434,8 +338,9 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
       </button>
     </div>
 
-    <p v-if="!library.games.value.length" class="muted panel">
-      No games yet. Import a CSV or JSON file, or load the sample data to see the layout.
+    <p v-if="!library.games.value.length" class="muted panel empty-library">
+      <span>No games yet. Importing a file and loading the sample data both live in Settings.</span>
+      <button @click="emit('navigate', 'settings')">Open Settings</button>
     </p>
     <LibraryGrid
       v-else-if="view === 'grid'"

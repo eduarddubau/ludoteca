@@ -495,6 +495,7 @@ button.primary { border-color: var(--accent); color: var(--accent); }
 .editor .actions { display: flex; gap: 8px; margin-top: 12px; }
 button.danger { border-color: #7a3b3b; color: #e0776b; }
 button.danger:hover { border-color: #e0776b; }
+button.danger:disabled { color: var(--muted); border-color: var(--border); }
 
 /* ---- stores ---- */
 .trust p { margin: 0 0 8px; }
@@ -532,3 +533,42 @@ button.danger:hover { border-color: #e0776b; }
 }
 .store-error { font-size: 12px; margin: 0 0 10px; }
 .store-card .actions { display: flex; gap: 8px; }
+
+/* ---- settings: one row per thing you can do, with the explanation beside the button
+   rather than behind it, since several of them are irreversible. */
+.setting {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  margin-top: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.setting-text { flex: 1 1 340px; max-width: 76ch; }
+.setting-text strong { display: block; margin-bottom: 3px; }
+.setting-text p { margin: 0; font-size: 13px; }
+.setting-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+.imported { display: flex; align-items: center; gap: 12px; }
+
+.wipe-confirm { border-color: #e0776b; }
+.wipe-title { margin: 0 0 8px; }
+.wipe-losses { margin: 4px 0 14px; padding-left: 20px; color: var(--muted); font-size: 13px; }
+
+.wipe-gate { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.wipe-gate label { color: var(--muted); font-size: 13px; }
+.wipe-gate input {
+  width: 90px;
+  font: inherit;
+  color: var(--text);
+  background: #0f1116;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+
+.empty-library { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

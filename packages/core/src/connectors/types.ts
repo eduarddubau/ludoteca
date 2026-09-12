@@ -71,6 +71,9 @@ export interface AuthResultSummary {
 export interface StoreConnector {
   readonly id: StoreId
   isAuthenticated(): Promise<boolean>
+  /** Forgets the credentials saved on this machine, whatever this store keeps them under.
+   *  The store still holds the session until it is revoked there. */
+  signOut(): Promise<void>
   authenticate(): Promise<AuthResultSummary>
   fetchLibrary(): Promise<OwnedGame[]>
 }

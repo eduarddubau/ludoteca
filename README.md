@@ -80,10 +80,10 @@ npm install
 npm run dev          # Vite + Electron, hot-reloading
 ```
 
-No account is needed to try it. The library starts empty; **Sample data** fills it with
-fifteen rows to show the layout, and **Import…** takes a CSV or JSON file — a CSV needs only a title
-column, and the importer maps the rest by matching headers, showing you its guesses before
-anything is written.
+No account is needed to try it. The library starts empty; on the Settings tab, **Load sample
+data** fills it with fifteen rows to show the layout, and **Import…** takes a CSV or JSON
+file — a CSV needs only a title column, and the importer maps the rest by matching headers,
+showing you its guesses before anything is written.
 
 Then press **Fetch missing** on the Metadata tab and watch it fill in. **Refetch all** redoes
 every row, and **Find match…** opens a picker for the titles it couldn't place on its own.
@@ -103,6 +103,7 @@ coverage is shown per field rather than as one percentage.
 | **Library** | The shelf: grid or list, filters, sorting, add/edit/hide |
 | **Metadata** | Fetch progress, per-field coverage, and a picker for titles it couldn't match |
 | **Stores** | Connect Steam, GOG or Epic — observed status, not assumed |
+| **Settings** | Import, export, sample data, and three separately scoped ways to delete |
 
 ## Architecture
 

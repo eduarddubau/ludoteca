@@ -55,6 +55,10 @@ export class EpicConnector implements StoreConnector {
     return (await this.platform.secrets.get(TOKEN_KEY)) !== null
   }
 
+  async signOut(): Promise<void> {
+    await this.platform.secrets.delete(TOKEN_KEY)
+  }
+
   /**
    * Asks Epic whether the session is still good, rather than inferring it from a stored
    * token's existence. This is what makes an "expired" card honest.

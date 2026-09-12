@@ -1,4 +1,4 @@
-import { STORE_PROFILES, tokenKey, type EditableField, type GamePlatform, type StoreConnection, type OwnedGame, type Platform, type PlayStatus, type StoreId, type UserData } from '@ludoteca/core'
+import { createConnector, STORE_PROFILES, type EditableField, type GamePlatform, type StoreConnection, type OwnedGame, type Platform, type PlayStatus, type StoreId, type UserData } from '@ludoteca/core'
 
 interface GameRow {
   store: string
@@ -189,10 +189,10 @@ export async function loadConnections(platform: Platform): Promise<Map<string, S
 
   for (const profile of STORE_PROFILES) {
     const row = byStore.get(profile.store)
-    const hasToken = (await platform.secrets.get(tokenKey(profile.store))) !== null
+    const signedIn = await createConnector(platform, profile.store).isAuthenticated()
     result.set(profile.store, {
       store: profile.store,
-      status: row?.last_error ? 'error' : hasToken ? 'connected' : 'disconnected',
+      status: row?.last_error ? 'error' : signedIn ? 'connected' : 'disconnected',
       accountName: row?.account_name ?? undefined,
       lastSyncedAt: row?.last_synced_at ?? undefined,
       lastError: row?.last_error ?? undefined,
@@ -225,8 +225,28 @@ export async function saveConnection(
   )
 }
 
-/** Clears the local token. Only the store itself can truly revoke a session. */
+/** Forgets the saved sign-in. Only the store itself can truly revoke a session. */
 export async function disconnectStore(platform: Platform, store: StoreId): Promise<void> {
-  await platform.secrets.delete(tokenKey(store))
+  await createConnector(platform, store).signOut()
   await platform.db.run('DELETE FROM sync_state WHERE store = ?', [store])
+}
+
+// ---- wipes. A library comes back from an import, sync history from a sync, and a token
+// only from signing in to the store again.
+
+/** Together: an override outliving its game would reattach to whatever next imports
+ *  under that id. */
+export async function clearLibrary(platform: Platform): Promise<void> {
+  await platform.db.run('DELETE FROM game')
+  await platform.db.run('DELETE FROM user_data')
+}
+
+/** What each store last did, not the credential that let it. */
+export async function clearSyncState(platform: Platform): Promise<void> {
+  await platform.db.run('DELETE FROM sync_state')
+}
+
+/** Disconnect, for every store at once. */
+export async function clearSignIns(platform: Platform): Promise<void> {
+  for (const profile of STORE_PROFILES) await createConnector(platform, profile.store).signOut()
 }

@@ -50,6 +50,10 @@ export class GogConnector implements StoreConnector {
     return (await this.platform.secrets.get(TOKEN_KEY)) !== null
   }
 
+  async signOut(): Promise<void> {
+    await this.platform.secrets.delete(TOKEN_KEY)
+  }
+
   async authenticate(): Promise<AuthResultSummary> {
     const result = await this.platform.authenticate({
       url: AUTH_URL,

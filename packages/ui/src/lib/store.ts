@@ -1,17 +1,21 @@
 import { computed, ref } from 'vue'
 import {
-  applyUserData, enrichLibrary, enrichWithAppId, EpicConnector, gameKey, GogConnector,
+  applyUserData, createConnector, enrichLibrary, enrichWithAppId, gameKey,
   type ExportedGame,
-  mergeLibrary, SteamConnector,
+  mergeLibrary,
   needsEnrichment, preserveEnrichment, reconcileImport,
-  type EditableField, type EnrichProgress, type LibraryEntry, type OwnedGame, type Platform,
-  type StoreConnection, type StoreConnector, type StoreId, type UserData
+  type EditableField, type EnrichProgress, type LibraryEntry, type OwnedGame,
+  type StoreConnection, type StoreId, type UserData
 } from '@ludoteca/core'
 import { usePlatform } from '../platform'
 import {
+  clearLibrary, clearSignIns, clearSyncState,
   deleteGame, disconnectStore, insertGame, loadConnections, loadGames, loadUserData,
   replaceGames, saveConnection, saveUserData
 } from './library'
+
+/** Cumulative: each scope destroys what the one before it does, and more. */
+export type WipeScope = 'library' | 'syncHistory' | 'everything'
 
 // Module scope, deliberately: a component holding this would abandon the run the moment
 // the user switched tabs, which is exactly what an activity view must not do.
@@ -25,25 +29,15 @@ const connecting = ref<StoreId | null>(null)
 
 const keyOf = (game: OwnedGame): string => `${game.store}:${game.storeGameId}`
 
-function connectorFor(platform: Platform, store: StoreId): StoreConnector {
-  switch (store) {
-    case 'gog':
-      return new GogConnector(platform)
-    case 'epic':
-      return new EpicConnector(platform)
-    case 'steam':
-      return new SteamConnector(platform)
-    default:
-      throw new Error(`${store} has no connector yet.`)
-  }
-}
-
 export function useLibrary() {
   // Overrides and hidden flags layered over synced rows, per field.
   const applied = computed(() => applyUserData(games.value, userData.value))
 
   const entries = computed(() => mergeLibrary(applied.value.filter((g) => !g.hidden)))
   const hiddenEntries = computed(() => mergeLibrary(applied.value.filter((g) => g.hidden)))
+  // Counted from user_data rather than the games on screen: an import that drops a game
+  // keeps its overrides, and a wipe deletes those too.
+  const customised = computed(() => userData.value.size)
   const editedKeys = computed(
     () => new Set(applied.value.filter((g) => g.editedFields.length).map(gameKey))
   )
@@ -94,7 +88,7 @@ export function useLibrary() {
     const platform = usePlatform()
     connecting.value = store
     try {
-      const summary = await connectorFor(platform, store).authenticate()
+      const summary = await createConnector(platform, store).authenticate()
       await saveConnection(platform, {
         store,
         status: 'connected',
@@ -126,7 +120,7 @@ export function useLibrary() {
     const platform = usePlatform()
     connecting.value = store
     try {
-      const fetched = await connectorFor(platform, store).fetchLibrary()
+      const fetched = await createConnector(platform, store).fetchLibrary()
 
       const untouched = games.value.filter((game) => game.store !== store)
       const forStore = games.value.filter((game) => game.store === store)
@@ -245,6 +239,19 @@ export function useLibrary() {
     await reload()
   }
 
+  /** Refused mid-run: a metadata checkpoint or a sync writes rows it read before the wipe,
+   *  and would put them back. */
+  async function wipe(scope: WipeScope): Promise<void> {
+    if (running.value || connecting.value !== null) {
+      throw new Error('Wait for the metadata run or store sync to finish first.')
+    }
+    const platform = usePlatform()
+    await clearLibrary(platform)
+    if (scope !== 'library') await clearSyncState(platform)
+    if (scope === 'everything') await clearSignIns(platform)
+    await reload()
+  }
+
   async function replaceAll(next: OwnedGame[]): Promise<void> {
     const platform = usePlatform()
     await replaceGames(platform, next)
@@ -309,13 +316,13 @@ export function useLibrary() {
   }
 
   return {
-    games, applied, entries, hiddenEntries, editedKeys,
+    games, applied, entries, hiddenEntries, editedKeys, customised,
     untried, unresolved, resolved, coverage,
     importGames, entrySources, userDataFor: userEntryFor, setHidden, setOverrides,
     addManual, removeGame,
     connections, connecting, connect, sync, disconnect,
     progress, enrichError, running,
     stop: () => (abort.value.aborted = true),
-    reload, replaceAll, enrich, applyMatch, previewMetadata
+    reload, replaceAll, enrich, applyMatch, previewMetadata, wipe
   }
 }

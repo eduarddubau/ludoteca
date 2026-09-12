@@ -59,6 +59,10 @@ export class SteamConnector implements StoreConnector {
     return (await this.platform.secrets.get(COOKIE_KEY)) !== null
   }
 
+  async signOut(): Promise<void> {
+    await this.platform.secrets.delete(COOKIE_KEY)
+  }
+
   async authenticate(): Promise<AuthResultSummary> {
     const result = await this.platform.authenticate({
       url: LOGIN_URL,

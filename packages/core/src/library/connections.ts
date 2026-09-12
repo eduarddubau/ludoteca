@@ -45,8 +45,6 @@ export const STORE_PROFILES: StoreProfile[] = [
   }
 ]
 
-export const tokenKey = (store: StoreId): string => `${store}.refreshToken`
-
 /** Refused while a cooldown is active, so a failing store cannot be hammered. */
 export function canConnect(connection: StoreConnection, now = new Date()): boolean {
   if (!connection.retryAfter) return true

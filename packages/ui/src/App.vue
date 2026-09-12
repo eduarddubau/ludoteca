@@ -4,9 +4,12 @@ import { useLibrary } from './lib/store'
 import LibraryView from './LibraryView.vue'
 import MetadataView from './MetadataView.vue'
 import StoresView from './StoresView.vue'
+import SettingsView from './SettingsView.vue'
+
+type Tab = 'library' | 'metadata' | 'stores' | 'settings'
 
 const library = useLibrary()
-const tab = ref<'library' | 'metadata' | 'stores'>('library')
+const tab = ref<Tab>('library')
 
 onMounted(library.reload)
 
@@ -32,6 +35,7 @@ const runLabel = computed(() => {
           </span>
         </button>
         <button :class="{ on: tab === 'stores' }" @click="tab = 'stores'">Stores</button>
+        <button :class="{ on: tab === 'settings' }" @click="tab = 'settings'">Settings</button>
       </nav>
 
       <span v-if="runLabel" class="running" title="Metadata fetch in progress">
@@ -39,8 +43,9 @@ const runLabel = computed(() => {
       </span>
     </header>
 
-    <LibraryView v-if="tab === 'library'" />
+    <LibraryView v-if="tab === 'library'" @navigate="tab = $event" />
     <MetadataView v-else-if="tab === 'metadata'" />
-    <StoresView v-else />
+    <StoresView v-else-if="tab === 'stores'" />
+    <SettingsView v-else @navigate="tab = $event" />
   </div>
 </template>
