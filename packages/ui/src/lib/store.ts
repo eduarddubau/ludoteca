@@ -264,9 +264,17 @@ export function useLibrary() {
     games.value = await loadGames(platform)
   }
 
+  /**
+   * Lays enriched rows over the library. The stored title always wins: a refetch after a title
+   * correction searches under the corrected title, and writing that back would replace the store's
+   * own title, leaving nothing to restore if the correction is later cleared.
+   */
   function merge(subset: OwnedGame[]): OwnedGame[] {
     const updated = new Map(subset.map((game) => [keyOf(game), game]))
-    return games.value.map((game) => updated.get(keyOf(game)) ?? game)
+    return games.value.map((game) => {
+      const next = updated.get(keyOf(game))
+      return next ? { ...next, title: game.title } : game
+    })
   }
 
   /** `withReviews` also refreshes every game's Steam review score, for runs over the whole
