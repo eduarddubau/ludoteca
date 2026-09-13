@@ -23,7 +23,8 @@
     "dev:electron": "npm run dev -w @ludoteca/electron",
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "dev": "concurrently -k -n ui,electron -c cyan,yellow \"npm run dev -w @ludoteca/ui\" \"npm run dev -w @ludoteca/electron\""
+    "predev": "npm run build -w @ludoteca/core",
+    "dev": "concurrently -k -n core,ui,electron -c magenta,cyan,yellow \"npm run dev -w @ludoteca/core\" \"npm run dev -w @ludoteca/ui\" \"npm run dev -w @ludoteca/electron\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
