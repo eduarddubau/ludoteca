@@ -1,0 +1,83 @@
+[
+  {
+    "title": "Portal 2",
+    "store": "steam",
+    "storeGameId": "620",
+    "platform": "pc",
+    "playStatus": "played",
+    "playtimeMinutes": 890,
+    "genres": ["Action", "Adventure"],
+    "releaseYear": 2011,
+    "developer": "Valve",
+    "publisher": "Valve"
+  },
+  {
+    "title": "Hades",
+    "store": "steam",
+    "storeGameId": "1145360",
+    "platform": "pc",
+    "playStatus": "played",
+    "playtimeMinutes": 3120,
+    "genres": ["Action", "Indie", "RPG"],
+    "releaseYear": 2020,
+    "developer": "Supergiant Games",
+    "publisher": "Supergiant Games"
+  },
+  {
+    "title": "Stardew Valley",
+    "store": "steam",
+    "storeGameId": "413150",
+    "platform": "pc",
+    "playStatus": "unplayed",
+    "genres": ["Indie", "RPG", "Simulation"],
+    "releaseYear": 2016,
+    "developer": "ConcernedApe",
+    "publisher": "ConcernedApe",
+    "notes": "A gift"
+  },
+  {
+    "title": "Hollow Knight",
+    "store": "steam",
+    "storeGameId": "367520",
+    "platform": "pc",
+    "playStatus": "played",
+    "playtimeMinutes": 4300,
+    "genres": ["Action", "Adventure", "Indie"],
+    "releaseYear": 2017,
+    "developer": "Team Cherry",
+    "publisher": "Team Cherry"
+  },
+  {
+    "title": "Disco Elysium - The Final Cut",
+    "store": "gog",
+    "platform": "pc",
+    "playStatus": "unplayed",
+    "genres": ["RPG"],
+    "releaseYear": 2021,
+    "developer": "ZA/UM",
+    "publisher": "ZA/UM"
+  },
+  {
+    "title": "Outer Wilds",
+    "store": "epic",
+    "platform": "pc",
+    "playStatus": "unknown",
+    "genres": ["Adventure"],
+    "releaseYear": 2019,
+    "developer": "Mobius Digital",
+    "publisher": "Annapurna Interactive",
+    "notes": "Epic reports no playtime"
+  },
+  {
+    "title": "The Legend of Zelda: Tears of the Kingdom",
+    "store": "other",
+    "platform": "switch",
+    "playStatus": "played",
+    "playtimeMinutes": 5400,
+    "genres": ["Adventure"],
+    "releaseYear": 2023,
+    "developer": "Nintendo",
+    "publisher": "Nintendo",
+    "notes": "Physical copy"
+  }
+]

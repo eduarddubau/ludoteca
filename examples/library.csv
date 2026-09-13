@@ -1,0 +1,8 @@
+title,store,store_game_id,platform,status,playtime_minutes,genres,release_year,developer,publisher,notes
+Portal 2,steam,620,pc,played,890,Action; Adventure,2011,Valve,Valve,
+Hades,steam,1145360,pc,played,3120,Action; Indie; RPG,2020,Supergiant Games,Supergiant Games,
+Stardew Valley,steam,413150,pc,unplayed,,Indie; RPG; Simulation,2016,ConcernedApe,ConcernedApe,A gift
+Hollow Knight,steam,367520,pc,played,4300,Action; Adventure; Indie,2017,Team Cherry,Team Cherry,
+Disco Elysium - The Final Cut,gog,,pc,unplayed,,RPG,2021,ZA/UM,ZA/UM,
+Outer Wilds,epic,,pc,,,Adventure,2019,Mobius Digital,Annapurna Interactive,Epic reports no playtime
+The Legend of Zelda: Tears of the Kingdom,other,,switch,played,5400,Adventure,2023,Nintendo,Nintendo,Physical copy
