@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useLibrary } from './lib/store'
+import { timeLeft } from './lib/time'
 import LibraryView from './LibraryView.vue'
 import MetadataView from './MetadataView.vue'
 import StoresView from './StoresView.vue'
@@ -16,8 +17,8 @@ onMounted(library.reload)
 // A run started on one tab keeps going on the other, so its progress has to be visible
 // from anywhere — otherwise leaving the tab feels like cancelling it.
 const runLabel = computed(() => {
-  const progress = library.progress.value
-  return progress ? `${progress.done} / ${progress.total}` : null
+  const status = library.runStatus.value
+  return status ? `${status.phase} ${status.done} / ${status.total} · ${timeLeft(status.secondsLeft)}` : null
 })
 </script>
 
@@ -62,9 +63,9 @@ const runLabel = computed(() => {
       <span
         v-if="runLabel"
         class="running"
-        title="Metadata fetch in progress"
+        title="Metadata run in progress — details on the Metadata tab"
       >
-        Fetching {{ runLabel }}
+        {{ runLabel }}
       </span>
     </header>
 

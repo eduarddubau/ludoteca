@@ -23,6 +23,54 @@ export type WipeScope = 'library' | 'syncHistory' | 'everything'
 // the user switched tabs, which is exactly what an activity view must not do.
 const games = ref<OwnedGame[]>([])
 const progress = ref<EnrichProgress | null>(null)
+
+interface RunClock {
+  phase: string
+  startedAt: number
+  /** Progress over roughly the last minute, plus one older point to measure from. */
+  samples: { at: number; done: number }[]
+  found: number
+  missed: number
+  counts: { found: string; missed: string } | null
+}
+const runClock = ref<RunClock | null>(null)
+// Ticks while a run is active, so the estimate keeps moving when Steam holds a request back.
+const now = ref(Date.now())
+let ticker: ReturnType<typeof setInterval> | undefined
+
+/** Starts timing a phase, and returns the progress callback that feeds it. */
+function beginPhase(
+  phase: string,
+  total: number,
+  counts: RunClock['counts'] = null
+): (p: EnrichProgress) => void {
+  const startedAt = Date.now()
+  runClock.value = { phase, startedAt, samples: [{ at: startedAt, done: 0 }], found: 0, missed: 0, counts }
+  progress.value = { done: 0, total, title: '', matched: false }
+  ticker ??= setInterval(() => (now.value = Date.now()), 1000)
+  return (p) => {
+    const clock = runClock.value
+    if (!clock) return
+    const at = Date.now()
+    const advanced = p.done > (progress.value?.done ?? 0)
+    const recent = clock.samples.filter((sample) => sample.at >= at - 60_000)
+    const anchor = clock.samples.filter((sample) => sample.at < at - 60_000).pop()
+    runClock.value = {
+      ...clock,
+      samples: [...(anchor ? [anchor] : []), ...recent, { at, done: p.done }],
+      found: clock.found + (advanced && p.matched ? 1 : 0),
+      missed: clock.missed + (advanced && !p.matched ? 1 : 0)
+    }
+    progress.value = p
+  }
+}
+
+function endRun(): void {
+  progress.value = null
+  runClock.value = null
+  clearInterval(ticker)
+  ticker = undefined
+}
 const enrichError = ref('')
 const abort = ref({ aborted: false })
 const userData = ref<Map<string, UserData>>(new Map())
@@ -82,6 +130,26 @@ export function useLibrary() {
   // bar or under the Stop button — a cancelled preview would read as "no match found".
   const previewing = ref(false)
   const running = computed(() => progress.value !== null || previewing.value)
+
+  /** Live numbers for the progress bar: position, counts, and time left at the recent pace. */
+  const runStatus = computed(() => {
+    const p = progress.value
+    const clock = runClock.value
+    if (!p || !clock) return null
+    const first = clock.samples[0]
+    const seconds = (now.value - first.at) / 1000
+    // Measured against the current time rather than the last update, so a stall lengthens it.
+    const rate = seconds >= 5 && p.done > first.done ? (p.done - first.done) / seconds : null
+    return {
+      phase: clock.phase,
+      done: p.done,
+      total: p.total,
+      title: p.title,
+      counts: clock.counts && { ...clock.counts, foundCount: clock.found, missedCount: clock.missed },
+      elapsedSeconds: (now.value - clock.startedAt) / 1000,
+      secondsLeft: rate ? Math.ceil((p.total - p.done) / rate) : null
+    }
+  })
 
   async function reload(): Promise<void> {
     const platform = usePlatform()
@@ -289,17 +357,16 @@ export function useLibrary() {
     const platform = usePlatform()
     abort.value = { aborted: false }
     enrichError.value = ''
-    progress.value = {
-      done: 0,
-      total: force ? target.length : target.filter(needsEnrichment).length,
-      title: '',
-      matched: false
-    }
+    const reportMatching = beginPhase(
+      'Matching on Steam',
+      force ? target.length : target.filter(needsEnrichment).length,
+      { found: 'matched', missed: 'no match' }
+    )
     try {
       let next = await enrichLibrary(platform, target, {
         force,
         signal: abort.value,
-        onProgress: (p) => (progress.value = p),
+        onProgress: reportMatching,
         onCheckpoint: async (partial) => {
           const merged = merge(partial)
           await replaceGames(platform, merged)
@@ -307,9 +374,11 @@ export function useLibrary() {
         }
       })
       if (withReviews && !abort.value.aborted) {
-        next = await refreshSteamReviews(platform, merge(next), {
+        const library = merge(next)
+        const apps = new Set(library.map(steamAppId).filter((id) => id !== undefined)).size
+        next = await refreshSteamReviews(platform, library, {
           signal: abort.value,
-          onProgress: (p) => (progress.value = p)
+          onProgress: beginPhase('Updating Steam reviews', apps)
         })
       }
       await replaceAll(merge(next))
@@ -317,7 +386,7 @@ export function useLibrary() {
       enrichError.value = err instanceof Error ? err.message : String(err)
       await reload()
     } finally {
-      progress.value = null
+      endRun()
     }
   }
 
@@ -328,18 +397,18 @@ export function useLibrary() {
     abort.value = { aborted: false }
     enrichError.value = ''
     const apps = new Set(games.value.map(steamAppId).filter((id) => id !== undefined))
-    progress.value = { done: 0, total: apps.size, title: 'Steam reviews', matched: true }
+    const report = beginPhase('Updating Steam reviews', apps.size)
     try {
       const next = await refreshSteamReviews(platform, games.value, {
         signal: abort.value,
-        onProgress: (p) => (progress.value = p)
+        onProgress: report
       })
       await replaceAll(merge(next))
     } catch (err) {
       enrichError.value = err instanceof Error ? err.message : String(err)
       await reload()
     } finally {
-      progress.value = null
+      endRun()
     }
   }
 
@@ -353,12 +422,15 @@ export function useLibrary() {
     const platform = usePlatform()
     abort.value = { aborted: false }
     enrichError.value = ''
-    progress.value = { done: 0, total: pcgamingwikiGaps(targets, recheck).length, title: 'PCGamingWiki', matched: false }
+    const report = beginPhase('Looking up on PCGamingWiki', pcgamingwikiGaps(targets, recheck).length, {
+      found: 'on the wiki',
+      missed: 'not on the wiki'
+    })
     try {
       const next = await fillFromPcgamingwiki(platform, targets, {
         recheck,
         signal: abort.value,
-        onProgress: (p) => (progress.value = p),
+        onProgress: report,
         onCheckpoint: async (partial) => {
           const merged = merge(partial)
           await replaceGames(platform, merged)
@@ -370,7 +442,7 @@ export function useLibrary() {
       enrichError.value = err instanceof Error ? err.message : String(err)
       await reload()
     } finally {
-      progress.value = null
+      endRun()
     }
   }
 
@@ -402,7 +474,7 @@ export function useLibrary() {
     importGames, entrySources, userDataFor: userEntryFor, setHidden, setOverrides,
     addManual, removeGame,
     connections, connecting, connect, sync, disconnect,
-    progress, enrichError, running,
+    progress, runStatus, enrichError, running,
     stop: () => (abort.value.aborted = true),
     reload, replaceAll, enrich, updateReviews, fillFromWiki, applyMatch, previewMetadata, wipe
   }

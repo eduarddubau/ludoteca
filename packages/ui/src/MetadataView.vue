@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import type { OwnedGame } from '@ludoteca/core'
 import { useLibrary } from './lib/store'
 import MatchPicker from './components/MatchPicker.vue'
+import { clock, roughly, timeLeft } from './lib/time'
 
 const library = useLibrary()
 const picking = ref<OwnedGame | null>(null)
@@ -13,11 +14,12 @@ const percent = computed(() =>
     : 0
 )
 
-function roughly(seconds: number): string {
-  if (seconds < 60) return 'under a minute'
-  const minutes = Math.round(seconds / 60)
-  return minutes === 1 ? 'about a minute' : `about ${minutes} minutes`
-}
+// While a run is going the bar is that run's progress; otherwise it is the library's coverage.
+const barPercent = computed(() => {
+  const status = library.runStatus.value
+  if (!status) return percent.value
+  return status.total ? Math.round((status.done / status.total) * 100) : 0
+})
 
 async function applyPick(appId: number): Promise<void> {
   const target = picking.value
@@ -40,15 +42,32 @@ async function applyPick(appId: number): Promise<void> {
       <div class="bar">
         <div
           class="bar-fill"
-          :style="{ width: `${percent}%` }"
+          :style="{ width: `${barPercent}%` }"
         />
       </div>
-      <span class="bar-label muted">
-        <template v-if="library.progress.value">
-          {{ library.progress.value.done }} / {{ library.progress.value.total }} —
-          {{ library.progress.value.title }}
-        </template>
-        <template v-else>{{ percent }}% of {{ library.games.value.length }} have metadata</template>
+      <span
+        v-if="library.runStatus.value"
+        class="bar-label"
+      >
+        <span class="bar-main">
+          <strong>{{ library.runStatus.value.phase }}</strong>
+          · {{ library.runStatus.value.done }} / {{ library.runStatus.value.total }} ({{ barPercent }}%)
+          · {{ timeLeft(library.runStatus.value.secondsLeft) }}
+        </span>
+        <span class="bar-detail muted">
+          <template v-if="library.runStatus.value.counts">
+            {{ library.runStatus.value.counts.foundCount }} {{ library.runStatus.value.counts.found }} ·
+            {{ library.runStatus.value.counts.missedCount }} {{ library.runStatus.value.counts.missed }} ·
+          </template>
+          {{ clock(library.runStatus.value.elapsedSeconds) }} elapsed
+          <template v-if="library.runStatus.value.title">· {{ library.runStatus.value.title }}</template>
+        </span>
+      </span>
+      <span
+        v-else
+        class="bar-label muted"
+      >
+        {{ percent }}% of {{ library.games.value.length }} have metadata
       </span>
 
       <button
