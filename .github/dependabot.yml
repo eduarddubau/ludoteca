@@ -21,19 +21,24 @@ updates:
         patterns: ['*']
 
   # Minor and patch updates arrive as one PR; each major gets its own, so CI tests it alone.
-  - package-ecosystem: npm
+  # No cooldown: for npm, Dependabot resolves the whole tree as of the cooldown date, so a
+  # lockfile holding any release younger than that fails with "No matching version found".
+  - package-ecosystem: npm # zizmor: ignore[dependabot-cooldown]
     directory: /
     schedule:
       interval: weekly
-    cooldown:
-      default-days: 7
     commit-message:
       prefix: build
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
+        # 0.x minors break like majors.
+        exclude-patterns: ['tsdown']
     ignore:
       # Types follow the Node that Electron bundles, not the newest Node. Raise by hand when
       # Electron's Node major changes.
       - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # typescript-eslint peers typescript <6.1. Remove once its range admits 7.
+      - dependency-name: typescript
         update-types: ['version-update:semver-major']
