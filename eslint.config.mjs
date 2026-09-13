@@ -1,3 +1,4 @@
+import { defineConfig } from 'eslint/config'
 import js from '@eslint/js'
 import ts from 'typescript-eslint'
 import vue from 'eslint-plugin-vue'
@@ -22,11 +23,11 @@ const shellFree = {
   }
 }
 
-export default ts.config(
+export default defineConfig(
   { ignores: ['**/dist/**', '**/out/**', '**/node_modules/**'] },
   js.configs.recommended,
-  ...ts.configs.recommended,
-  ...vue.configs['flat/recommended'],
+  ts.configs.recommended,
+  vue.configs['flat/recommended'],
   // TypeScript already resolves globals; no-undef only produces false positives here.
   { files: ['**/*.ts', '**/*.vue'], rules: { 'no-undef': 'off' } },
   // Build scripts are plain Node ESM, outside the shell boundary the rest of this
@@ -40,6 +41,17 @@ export default ts.config(
   {
     files: ['**/*.vue'],
     languageOptions: { parser: vueParser, parserOptions: { parser: ts.parser } }
+  },
+  {
+    files: ['**/*.ts', '**/*.vue'],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+        extraFileExtensions: ['.vue']
+      }
+    },
+    rules: { '@typescript-eslint/no-deprecated': 'error' }
   },
   shellFree
 )

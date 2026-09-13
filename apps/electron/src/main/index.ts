@@ -18,7 +18,7 @@ const DEV_URL = 'http://localhost:5173'
 const APP_SCHEME = 'ludoteca'
 const APP_HOST = 'app'
 const APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`
-const UI_ROOT = join(__dirname, '../renderer')
+const UI_ROOT = join(import.meta.dirname, '../renderer')
 
 // Pinned so both shells agree. Electron's default app name comes from package.json's
 // `name` in development and productName once packaged, and safeStorage mints its keychain
@@ -168,7 +168,7 @@ function createWindow(): void {
     backgroundColor: '#14161a',
     autoHideMenuBar: true,
     webPreferences: {
-      preload: join(__dirname, '../preload/index.cjs'),
+      preload: join(import.meta.dirname, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true

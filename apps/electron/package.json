@@ -2,10 +2,11 @@
   "name": "@ludoteca/electron",
   "version": "0.1.0",
   "private": true,
-  "main": "./dist/main/index.cjs",
+  "type": "module",
+  "main": "./dist/main/index.mjs",
   "scripts": {
-    "build": "tsup && node scripts/copy-renderer.mjs",
-    "dev": "tsup && wait-on tcp:5173 && cross-env LUDOTECA_DEV=1 electron .",
+    "build": "tsdown && node scripts/copy-renderer.mjs",
+    "dev": "tsdown && wait-on tcp:5173 && cross-env LUDOTECA_DEV=1 electron .",
     "typecheck": "tsc --noEmit",
     "package": "npm run build -w @ludoteca/core && npm run build -w @ludoteca/ui && npm run build && electron-builder --dir",
     "dist": "npm run build -w @ludoteca/core && npm run build -w @ludoteca/ui && npm run build && electron-builder"
@@ -16,12 +17,12 @@
   "devDependencies": {
     "@ludoteca/core": "*",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^24.13.3",
+    "@types/node": "^24.13.4",
     "cross-env": "^10.1.0",
-    "electron": "44.2.0",
-    "electron-builder": "^26.15.3",
-    "tsup": "^8.5.0",
-    "wait-on": "^9.0.1"
+    "electron": "44.3.0",
+    "electron-builder": "^26.16.1",
+    "tsdown": "^0.23.0",
+    "wait-on": "^9.1.0"
   },
   "description": "One library across Steam, GOG and Epic",
   "author": {
