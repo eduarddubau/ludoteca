@@ -721,7 +721,19 @@ button.danger:disabled { color: var(--muted); border-color: var(--border); }
 .settings-columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
-  gap: 8px 32px;
+  /* No row gap: subgrids inherit it between their own rows. */
+  gap: 0 32px;
   align-items: start;
 }
-.settings-columns > section > .section:first-child { margin-top: 8px; }
+/* Rows shared across both columns — heading, lead, three cards, trailing panels — so each card
+   matches the height of its neighbour. A fourth card in either column needs a larger span.
+   Grid items do not collapse margins, hence the explicit ones below. */
+.settings-columns > section {
+  display: grid;
+  grid-row: span 6;
+  grid-template-rows: subgrid;
+}
+.settings-columns > section > .section:first-child { margin: 8px 0 0; }
+.settings-lead { grid-row: 2; }
+.settings-lead > :last-child { margin-bottom: 4px; }
+.settings-panels { grid-row: 6; padding-bottom: 8px; }
