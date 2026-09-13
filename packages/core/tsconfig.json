@@ -7,6 +7,10 @@
     "strict": true,
     "declaration": true,
     "outDir": "dist",
+    // Incremental, so the dev watcher's first pass rewrites nothing the build just wrote.
+    // Build info lives in dist: delete the whole folder, not single files, to force a rebuild.
+    "incremental": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
     "rootDir": "src",
     "skipLibCheck": true,
     "verbatimModuleSyntax": true

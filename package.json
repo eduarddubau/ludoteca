@@ -43,7 +43,7 @@
     }
   },
   "allowScripts": {
-    "better-sqlite3": false,
-    "electron-winstaller": false
+    "electron-winstaller": false,
+    "fsevents": false
   }
 }
