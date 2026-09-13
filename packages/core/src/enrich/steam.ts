@@ -1,5 +1,7 @@
 import type { Platform } from '../platform.js'
 import type { OwnedGame } from '../connectors/types.js'
+import { fillMetacriticFromPcgamingwiki } from './pcgamingwiki.js'
+import { fetchJson, sleep, steamAppId } from './shared.js'
 
 export interface EnrichProgress {
   done: number
@@ -22,6 +24,8 @@ export interface EnrichOptions {
    */
   onCheckpoint?: (games: OwnedGame[]) => Promise<void> | void
   checkpointEvery?: number
+  /** After matching, fill scores Steam did not show from PCGamingWiki, batched and paced. */
+  fillFromPcgamingwiki?: boolean
 }
 
 interface SearchHit {
@@ -42,56 +46,9 @@ export interface MatchCandidate {
 const normalize = (s: string): string =>
   s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
-
-/** Steam refused or the request failed — distinct from "Steam does not have this game". */
-export class EnrichTransientError extends Error {
-  constructor(public readonly url: string, message: string) {
-    super(message)
-    this.name = 'EnrichTransientError'
-  }
-}
-
-const RETRY_DELAYS_MS = [1000, 4000, 12000]
-
-/**
- * A throttled or failed request must never be mistaken for a game Steam does not carry:
- * that would stamp enrichedAt and permanently record the game as having no metadata.
- * Transient failures are retried with backoff and then raised.
- */
-async function json<T>(platform: Platform, url: string): Promise<T | null> {
-  let lastProblem = 'unknown'
-
-  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
-    if (attempt > 0) await sleep(RETRY_DELAYS_MS[attempt - 1])
-
-    let response
-    try {
-      response = await platform.http({ url })
-    } catch (err) {
-      lastProblem = err instanceof Error ? err.message : String(err)
-      continue
-    }
-
-    // 429 and 5xx are Steam pushing back; retrying is the correct response.
-    if (response.status === 429 || response.status >= 500) {
-      lastProblem = `HTTP ${response.status}`
-      continue
-    }
-
-    // A definitive answer, even a 404: the game is simply not there.
-    if (response.status !== 200) return null
-
-    try {
-      return JSON.parse(response.body) as T
-    } catch {
-      // Steam serves an HTML error page under a 200 when it is unhappy.
-      lastProblem = 'non-JSON response'
-    }
-  }
-
-  throw new EnrichTransientError(url, `Steam kept failing (${lastProblem}) after ${RETRY_DELAYS_MS.length + 1} attempts.`)
-}
+// Every request goes through the shared helper, so a failure is never recorded as a miss.
+const json = <T>(platform: Platform, url: string): Promise<T | null> =>
+  fetchJson<T>(platform, url, { source: 'Steam' })
 
 // Editions Steam ships under a longer name than the game is commonly called. Anchored at
 // both ends, so the whole remainder has to be edition words: anchored only at the end, it
@@ -231,13 +188,6 @@ function reviewsOf(item: StoreItem | undefined): ReviewFields {
   }
 }
 
-/** The Steam app a game is known by: the one a match stored, or its own id on Steam. */
-export function steamAppId(game: OwnedGame): number | undefined {
-  const matched = game.storeUrl?.match(/store\.steampowered\.com\/app\/(\d+)/)
-  if (matched) return Number(matched[1])
-  return game.store === 'steam' && /^\d+$/.test(game.storeGameId) ? Number(game.storeGameId) : undefined
-}
-
 /**
  * Re-reads Steam's review summary for every game with a Steam app, a hundred to a request.
  * Separate from matching because review scores drift where Metacritic's do not, and
@@ -317,6 +267,7 @@ export async function enrichWithAppId(
     ...game,
     criticScore: details?.metacritic?.score ?? game.criticScore,
     metacriticUrl: details?.metacritic?.url ?? game.metacriticUrl,
+    criticScoreSource: details?.metacritic ? 'steam' : game.criticScoreSource,
     // No fallback to the stored cover: that is how a dead link would survive a refetch.
     coverUrl: coverOf(item),
     ...reviewsOf(item),
@@ -351,7 +302,10 @@ export async function enrichLibrary(
   games: OwnedGame[],
   options: EnrichOptions = {}
 ): Promise<OwnedGame[]> {
-  const { delayMs = 350, onProgress, signal, force = false, onCheckpoint, checkpointEvery = 25 } = options
+  const {
+    delayMs = 350, onProgress, signal, force = false, onCheckpoint, checkpointEvery = 25,
+    fillFromPcgamingwiki = false
+  } = options
   const pending = games.filter((game) => force || needsEnrichment(game))
   const results = new Map<string, OwnedGame>()
 
@@ -381,6 +335,23 @@ export async function enrichLibrary(
 
     if (onCheckpoint && (index + 1) % checkpointEvery === 0) await onCheckpoint(merged())
     await sleep(delayMs)
+  }
+
+  // Batched after the loop rather than per game: fifty wiki pages cost one read.
+  if (fillFromPcgamingwiki && !signal?.aborted && results.size) {
+    const keep = (filled: OwnedGame[]): void => {
+      for (const game of filled) results.set(`${game.store}:${game.storeGameId}`, game)
+    }
+    keep(
+      await fillMetacriticFromPcgamingwiki(platform, [...results.values()], {
+        signal,
+        onProgress,
+        onCheckpoint: async (filled) => {
+          keep(filled)
+          await onCheckpoint?.(merged())
+        }
+      })
+    )
   }
 
   return merged()

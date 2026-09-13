@@ -16,6 +16,7 @@ interface GameRow {
   publisher: string | null
   critic_score: number | null
   metacritic_url: string | null
+  critic_score_source: string | null
   steam_review_percent: number | null
   steam_review_count: number | null
   steam_review_label: string | null
@@ -51,6 +52,10 @@ function toGame(row: GameRow): OwnedGame {
     publisher: row.publisher ?? undefined,
     criticScore: row.critic_score ?? undefined,
     metacriticUrl: row.metacritic_url ?? undefined,
+    criticScoreSource:
+      row.critic_score_source === 'steam' || row.critic_score_source === 'pcgamingwiki'
+        ? row.critic_score_source
+        : undefined,
     steamReviewPercent: row.steam_review_percent ?? undefined,
     steamReviewCount: row.steam_review_count ?? undefined,
     steamReviewLabel: row.steam_review_label ?? undefined,
@@ -75,11 +80,11 @@ async function insertRow(platform: Platform, game: OwnedGame): Promise<void> {
     `INSERT OR REPLACE INTO game (
        store, store_game_id, title, ownership_kind, owner_account_id, exclude_reason,
        platform, play_status, playtime_minutes, genres, release_year,
-       developer, publisher, critic_score, metacritic_url,
+       developer, publisher, critic_score, metacritic_url, critic_score_source,
        steam_review_percent, steam_review_count, steam_review_label, store_url,
        user_rating, last_played_at, icon_url, cover_url, notes, enriched_at,
        added_manually
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       game.store,
       game.storeGameId,
@@ -96,6 +101,7 @@ async function insertRow(platform: Platform, game: OwnedGame): Promise<void> {
       game.publisher ?? null,
       game.criticScore ?? null,
       game.metacriticUrl ?? null,
+      game.criticScoreSource ?? null,
       game.steamReviewPercent ?? null,
       game.steamReviewCount ?? null,
       game.steamReviewLabel ?? null,

@@ -75,6 +75,10 @@ export function fromJson(text: string): ExportedGame[] {
       publisher: str(entry['publisher']),
       criticScore: num(entry['criticScore']),
       metacriticUrl: str(entry['metacriticUrl']),
+      criticScoreSource:
+        entry['criticScoreSource'] === 'steam' || entry['criticScoreSource'] === 'pcgamingwiki'
+          ? entry['criticScoreSource']
+          : undefined,
       steamReviewPercent: num(entry['steamReviewPercent']),
       steamReviewCount: num(entry['steamReviewCount']),
       steamReviewLabel: str(entry['steamReviewLabel']),

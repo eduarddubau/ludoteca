@@ -37,6 +37,7 @@ const hours = computed(() =>
         :score="entry.criticScore"
         :href="metacritic.url"
         :exact="metacritic.exact"
+        :source="entry.criticScoreSource"
       />
       <ReviewChip
         v-if="entry.steamReviewPercent !== undefined"

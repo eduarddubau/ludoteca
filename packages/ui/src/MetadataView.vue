@@ -53,10 +53,10 @@ async function applyPick(appId: number): Promise<void> {
       </button>
       <button
         v-if="!library.running.value && library.games.value.length"
-        title="Refresh every game's Steam review score without searching again"
-        @click="library.updateReviews()"
+        title="Refresh Steam reviews, and look up Metacritic scores Steam lacks, without matching again"
+        @click="library.updateScores()"
       >
-        Update Steam reviews
+        Update scores
       </button>
       <button v-if="library.running.value" @click="library.stop()">Stop</button>
     </div>
@@ -82,8 +82,18 @@ async function applyPick(appId: number): Promise<void> {
       <p class="muted coverage-hint">
         Steam reviews are the share of players who recommend a game, and run above Metacritic's
         critic scores, so the two are kept apart rather than one filling in for the other. They
-        also change over time: <strong>Update Steam reviews</strong> refreshes them for the whole
-        library in a few requests.
+        also change over time: <strong>Update scores</strong> refreshes them for the whole library
+        in a few requests.
+      </p>
+      <p class="muted coverage-hint">
+        Where Steam shows no Metacritic score, one is looked up on
+        <a href="https://www.pcgamingwiki.com/" target="_blank" rel="noreferrer">PCGamingWiki</a>,
+        whose editors record it with its Metacritic page (content under
+        <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/" target="_blank" rel="noreferrer">CC BY-NC-SA</a>).
+        <template v-if="library.scoredViaWiki.value">
+          {{ library.scoredViaWiki.value }} of the scores here came from there.
+        </template>
+        The wiki allows a request a second, so filling a large library takes a few minutes.
       </p>
     </div>
 

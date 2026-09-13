@@ -72,6 +72,7 @@ function cell(entry: LibraryEntry, key: ColumnKey): string {
               :score="entry.criticScore"
               :href="entryMetacriticLink(entry).url"
               :exact="entryMetacriticLink(entry).exact"
+              :source="entry.criticScoreSource"
             />
             <ReviewChip
               v-else-if="column.key === 'steamReviews'"

@@ -29,10 +29,13 @@ export {
 } from './links.js'
 export {
   enrichGame, enrichLibrary, enrichWithAppId, searchCandidates, shortenTitle, needsEnrichment,
-  isEditionOf, refreshSteamReviews, steamAppId,
-  EnrichTransientError,
+  isEditionOf, refreshSteamReviews,
   type EnrichProgress, type EnrichOptions, type MatchCandidate
 } from './enrich/steam.js'
+export { EnrichTransientError, steamAppId } from './enrich/shared.js'
+export {
+  fillMetacriticFromPcgamingwiki, metacriticFromWikitext, type MetacriticReception
+} from './enrich/pcgamingwiki.js'
 export { toCsv, toJson, type ExportedGame } from './export/csv.js'
 export { fromJson } from './import/json.js'
 export {

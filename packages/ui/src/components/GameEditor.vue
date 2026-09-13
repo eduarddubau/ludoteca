@@ -60,7 +60,13 @@ const matched = computed(() => props.preview?.storeUrl !== undefined)
 const facts = computed(() => {
   const game = props.preview ?? props.entry
   return [
-    { label: 'Metacritic', value: game?.criticScore?.toString() },
+    {
+      label: 'Metacritic',
+      value:
+        game?.criticScore === undefined
+          ? undefined
+          : `${game.criticScore}${game.criticScoreSource === 'pcgamingwiki' ? ' (via PCGamingWiki)' : ''}`
+    },
     {
       label: 'Steam reviews',
       value:

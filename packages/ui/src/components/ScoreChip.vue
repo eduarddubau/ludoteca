@@ -2,8 +2,17 @@
 import { computed } from 'vue'
 import { scoreBand } from '@ludoteca/core'
 
-const props = defineProps<{ score?: number; href: string; exact: boolean }>()
+const props = defineProps<{
+  score?: number
+  href: string
+  exact: boolean
+  source?: 'steam' | 'pcgamingwiki'
+}>()
 const band = computed(() => (props.score === undefined ? 'none' : scoreBand(props.score)))
+const title = computed(() => {
+  const page = props.exact ? 'Metacritic page' : 'Search Metacritic (no exact match resolved yet)'
+  return props.source === 'pcgamingwiki' ? `${page} · score via PCGamingWiki` : page
+})
 </script>
 
 <template>
@@ -13,7 +22,7 @@ const band = computed(() => (props.score === undefined ? 'none' : scoreBand(prop
     :href="href"
     target="_blank"
     rel="noreferrer"
-    :title="exact ? 'Metacritic page' : 'Search Metacritic (no exact match resolved yet)'"
+    :title="title"
   >
     {{ score ?? '–' }}
   </a>

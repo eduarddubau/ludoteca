@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import {
-  applyUserData, createConnector, enrichLibrary, enrichWithAppId, gameKey, refreshSteamReviews,
+  applyUserData, createConnector, enrichLibrary, enrichWithAppId, fillMetacriticFromPcgamingwiki,
+  gameKey, refreshSteamReviews,
   steamAppId,
   type ExportedGame,
   mergeLibrary,
@@ -48,6 +49,9 @@ export function useLibrary() {
     games.value.filter((g) => g.enrichedAt !== undefined && g.coverUrl === undefined)
   )
   const resolved = computed(() => games.value.filter((g) => g.coverUrl !== undefined))
+  const scoredViaWiki = computed(
+    () => games.value.filter((g) => g.criticScoreSource === 'pcgamingwiki').length
+  )
 
   // Per-field, because a field added to enrichment after a run leaves every existing row
   // without it — and since those rows are already marked attempted, "fetch missing"
@@ -281,6 +285,7 @@ export function useLibrary() {
     try {
       let next = await enrichLibrary(platform, target, {
         force,
+        fillFromPcgamingwiki: true,
         signal: abort.value,
         onProgress: (p) => (progress.value = p),
         onCheckpoint: async (partial) => {
@@ -304,7 +309,11 @@ export function useLibrary() {
     }
   }
 
-  async function updateReviews(): Promise<void> {
+  /**
+   * Scores only, for rows already matched: Steam reviews for every game, then Metacritic
+   * from PCGamingWiki for games Steam did not score. No searching, so nothing is rematched.
+   */
+  async function updateScores(): Promise<void> {
     if (running.value) return
     const platform = usePlatform()
     abort.value = { aborted: false }
@@ -312,11 +321,23 @@ export function useLibrary() {
     const apps = new Set(games.value.map(steamAppId).filter((id) => id !== undefined))
     progress.value = { done: 0, total: apps.size, title: 'Steam reviews', matched: true }
     try {
-      const next = await refreshSteamReviews(platform, games.value, {
+      let next = await refreshSteamReviews(platform, games.value, {
         signal: abort.value,
         onProgress: (p) => (progress.value = p)
       })
       await replaceAll(merge(next))
+      if (!abort.value.aborted) {
+        next = await fillMetacriticFromPcgamingwiki(platform, games.value, {
+          signal: abort.value,
+          onProgress: (p) => (progress.value = p),
+          onCheckpoint: async (partial) => {
+            const merged = merge(partial)
+            await replaceGames(platform, merged)
+            games.value = merged
+          }
+        })
+        await replaceAll(merge(next))
+      }
     } catch (err) {
       enrichError.value = err instanceof Error ? err.message : String(err)
       await reload()
@@ -334,7 +355,10 @@ export function useLibrary() {
     if (running.value) throw new Error('A metadata run is in progress. Stop it first.')
     previewing.value = true
     try {
-      const [enriched] = await enrichLibrary(usePlatform(), [draft], { force: true })
+      const [enriched] = await enrichLibrary(usePlatform(), [draft], {
+        force: true,
+        fillFromPcgamingwiki: true
+      })
       return enriched ?? draft
     } finally {
       previewing.value = false
@@ -342,18 +366,21 @@ export function useLibrary() {
   }
 
   async function applyMatch(game: OwnedGame, appId: number): Promise<void> {
-    const updated = await enrichWithAppId(usePlatform(), game, appId)
+    const platform = usePlatform()
+    const [updated] = await fillMetacriticFromPcgamingwiki(platform, [
+      await enrichWithAppId(platform, game, appId)
+    ])
     await replaceAll(merge([updated]))
   }
 
   return {
     games, applied, entries, hiddenEntries, editedKeys, customised,
-    untried, unresolved, resolved, coverage,
+    untried, unresolved, resolved, coverage, scoredViaWiki,
     importGames, entrySources, userDataFor: userEntryFor, setHidden, setOverrides,
     addManual, removeGame,
     connections, connecting, connect, sync, disconnect,
     progress, enrichError, running,
     stop: () => (abort.value.aborted = true),
-    reload, replaceAll, enrich, updateReviews, applyMatch, previewMetadata, wipe
+    reload, replaceAll, enrich, updateScores, applyMatch, previewMetadata, wipe
   }
 }

@@ -153,6 +153,11 @@ const number = (raw: string | undefined): number | undefined => {
   return Number.isNaN(value) ? undefined : value
 }
 
+const scoreSource = (raw: string | undefined): OwnedGame['criticScoreSource'] => {
+  const value = raw?.trim()
+  return value === 'steam' || value === 'pcgamingwiki' ? value : undefined
+}
+
 const text = (raw: string | undefined): string | undefined => {
   const value = raw?.trim()
   return value ? value : undefined
@@ -171,6 +176,7 @@ function readEnrichment(row: Record<string, string>): Partial<OwnedGame> {
     criticScore: number(row['critic_score']),
     userRating: number(row['user_rating']),
     metacriticUrl: text(row['metacritic_url']),
+    criticScoreSource: scoreSource(row['critic_score_source']),
     steamReviewPercent: number(row['steam_review_percent']),
     steamReviewCount: number(row['steam_review_count']),
     steamReviewLabel: text(row['steam_review_label']),
