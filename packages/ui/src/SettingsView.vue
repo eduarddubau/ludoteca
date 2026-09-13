@@ -185,218 +185,223 @@ function exportAs(format: 'csv' | 'json'): void {
       {{ signedIn }} of {{ connections.length }} stores signed in
     </p>
 
-    <h2 class="section">
-      Data
-    </h2>
+    <div class="settings-columns">
+      <section>
+        <h2 class="section">
+          Data
+        </h2>
 
-    <div class="setting">
-      <div class="setting-text">
-        <strong>Import</strong>
-        <p class="muted">
-          A CSV or JSON file. Columns are matched by name and by what they contain, and
-          you confirm the mapping before anything is written. Importing replaces synced
-          rows but keeps your edits and anything added by hand.
-        </p>
-      </div>
-      <div class="setting-actions">
-        <button
-          :disabled="busy"
-          @click="fileInput?.click()"
-        >
-          Import…
-        </button>
-      </div>
-    </div>
-
-    <div class="setting">
-      <div class="setting-text">
-        <strong>Export</strong>
-        <p class="muted">
-          A full backup, not a summary: every field, plus hidden flags and per-field
-          overrides, so importing it back restores the library as it stands. Hidden games
-          are included.
-        </p>
-      </div>
-      <div class="setting-actions">
-        <div class="menu-anchor">
-          <button
-            :disabled="!gameCount"
-            @click="exportMenu = !exportMenu"
-          >
-            Export… ({{ gameCount }})
-          </button>
-          <div
-            v-if="exportMenu"
-            class="menu-backdrop"
-            @click="exportMenu = false"
-          />
-          <div
-            v-if="exportMenu"
-            class="menu"
-          >
-            <button @click="exportAs('csv')">
-              CSV
-            </button>
-            <button @click="exportAs('json')">
-              JSON
+        <div class="setting">
+          <div class="setting-text">
+            <strong>Import</strong>
+            <p class="muted">
+              A CSV or JSON file. Columns are matched by name and by what they contain, and
+              you confirm the mapping before anything is written. Importing replaces synced
+              rows but keeps your edits and anything added by hand.
+            </p>
+          </div>
+          <div class="setting-actions">
+            <button
+              :disabled="busy"
+              @click="fileInput?.click()"
+            >
+              Import…
             </button>
           </div>
         </div>
-      </div>
-    </div>
 
-    <div class="setting">
-      <div class="setting-text">
-        <strong>Sample data</strong>
-        <p class="muted">
-          A handful of games to see the layout with. It replaces the whole library, so it
-          is only offered while there is nothing to lose.
-        </p>
-      </div>
-      <div class="setting-actions">
-        <button
-          :disabled="gameCount > 0 || busy"
-          @click="library.replaceAll(sampleLibrary())"
-        >
-          Load sample data
-        </button>
-      </div>
-    </div>
+        <div class="setting">
+          <div class="setting-text">
+            <strong>Export</strong>
+            <p class="muted">
+              A full backup, not a summary: every field, plus hidden flags and per-field
+              overrides, so importing it back restores the library as it stands. Hidden games
+              are included.
+            </p>
+          </div>
+          <div class="setting-actions">
+            <div class="menu-anchor">
+              <button
+                :disabled="!gameCount"
+                @click="exportMenu = !exportMenu"
+              >
+                Export… ({{ gameCount }})
+              </button>
+              <div
+                v-if="exportMenu"
+                class="menu-backdrop"
+                @click="exportMenu = false"
+              />
+              <div
+                v-if="exportMenu"
+                class="menu"
+              >
+                <button @click="exportAs('csv')">
+                  CSV
+                </button>
+                <button @click="exportAs('json')">
+                  JSON
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
 
-    <input
-      ref="fileInput"
-      type="file"
-      accept=".csv,.json,text/csv,application/json"
-      hidden
-      @change="onFileChosen"
-    >
+        <div class="setting">
+          <div class="setting-text">
+            <strong>Sample data</strong>
+            <p class="muted">
+              A handful of games to see the layout with. It replaces the whole library, so it
+              is only offered while there is nothing to lose.
+            </p>
+          </div>
+          <div class="setting-actions">
+            <button
+              :disabled="gameCount > 0 || busy"
+              @click="library.replaceAll(sampleLibrary())"
+            >
+              Load sample data
+            </button>
+          </div>
+        </div>
 
-    <p
-      v-if="importError"
-      class="panel error"
-    >
-      {{ importError }}
-    </p>
-
-    <div
-      v-if="imported !== null"
-      class="panel imported"
-    >
-      <span>Imported {{ imported }} rows.</span>
-      <button @click="emit('navigate', 'library')">
-        View library
-      </button>
-    </div>
-
-    <MappingPanel
-      v-if="pendingCsv"
-      :parsed="pendingCsv.parsed"
-      :suggested="pendingCsv.suggested"
-      @confirm="confirmImport"
-      @cancel="pendingCsv = null"
-    />
-
-    <h2 class="section">
-      Delete
-    </h2>
-    <p class="muted">
-      None of these can be undone, and none of them touch your stores — a cleared library
-      is gone from this machine only. Export a backup first if you might want it back.
-    </p>
-    <p
-      v-if="busy"
-      class="panel muted"
-    >
-      A metadata run or store sync is in progress. Importing and deleting wait until it
-      finishes, since it would write back rows from before.
-    </p>
-
-    <div
-      v-for="wipe in WIPES"
-      :key="wipe.scope"
-      class="setting"
-    >
-      <div class="setting-text">
-        <strong>{{ wipe.label }}</strong>
-        <p class="muted">
-          {{ wipe.blurb }}
-        </p>
-      </div>
-      <div class="setting-actions">
-        <button
-          class="danger"
-          :disabled="!losses(wipe.scope).length || pendingWipe !== null || busy"
-          @click="startWipe(wipe.scope)"
-        >
-          <template v-if="!losses(wipe.scope).length">
-            Nothing to clear
-          </template>
-          <template v-else>
-            {{ wipe.button }}
-          </template>
-        </button>
-      </div>
-    </div>
-
-    <div
-      v-if="pendingWipe"
-      class="panel wipe-confirm"
-    >
-      <p class="wipe-title">
-        <strong>{{ pendingLabel }}</strong> — this cannot be undone.
-      </p>
-      <p class="muted">
-        This deletes:
-      </p>
-      <ul class="wipe-losses">
-        <li
-          v-for="line in pendingLosses"
-          :key="line.text"
-        >
-          {{ line.text }}
-        </li>
-      </ul>
-
-      <div class="wipe-gate">
-        <button
-          :disabled="!gameCount"
-          @click="exportAs('json')"
-        >
-          Export a backup first
-        </button>
-        <label for="wipe-gate">Type {{ confirmCount }} to confirm</label>
         <input
-          id="wipe-gate"
-          v-model="typed"
-          type="text"
-          inputmode="numeric"
-          autocomplete="off"
+          ref="fileInput"
+          type="file"
+          accept=".csv,.json,text/csv,application/json"
+          hidden
+          @change="onFileChosen"
         >
-        <button
-          :disabled="wiping"
-          @click="cancelWipe"
+
+        <p
+          v-if="importError"
+          class="panel error"
         >
-          Cancel
-        </button>
-        <button
-          class="danger"
-          :disabled="!armed || wiping || busy"
-          @click="confirmWipe"
+          {{ importError }}
+        </p>
+
+        <div
+          v-if="imported !== null"
+          class="panel imported"
         >
-          <template v-if="wiping">
-            Deleting…
-          </template>
-          <template v-else>
-            Delete permanently
-          </template>
-        </button>
-      </div>
-      <p
-        v-if="wipeError"
-        class="error"
-      >
-        {{ wipeError }}
-      </p>
+          <span>Imported {{ imported }} rows.</span>
+          <button @click="emit('navigate', 'library')">
+            View library
+          </button>
+        </div>
+
+        <MappingPanel
+          v-if="pendingCsv"
+          :parsed="pendingCsv.parsed"
+          :suggested="pendingCsv.suggested"
+          @confirm="confirmImport"
+          @cancel="pendingCsv = null"
+        />
+      </section>
+      <section>
+        <h2 class="section">
+          Delete
+        </h2>
+        <p class="muted">
+          None of these can be undone, and none of them touch your stores — a cleared library
+          is gone from this machine only. Export a backup first if you might want it back.
+        </p>
+        <p
+          v-if="busy"
+          class="panel muted"
+        >
+          A metadata run or store sync is in progress. Importing and deleting wait until it
+          finishes, since it would write back rows from before.
+        </p>
+
+        <div
+          v-for="wipe in WIPES"
+          :key="wipe.scope"
+          class="setting"
+        >
+          <div class="setting-text">
+            <strong>{{ wipe.label }}</strong>
+            <p class="muted">
+              {{ wipe.blurb }}
+            </p>
+          </div>
+          <div class="setting-actions">
+            <button
+              class="danger"
+              :disabled="!losses(wipe.scope).length || pendingWipe !== null || busy"
+              @click="startWipe(wipe.scope)"
+            >
+              <template v-if="!losses(wipe.scope).length">
+                Nothing to clear
+              </template>
+              <template v-else>
+                {{ wipe.button }}
+              </template>
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-if="pendingWipe"
+          class="panel wipe-confirm"
+        >
+          <p class="wipe-title">
+            <strong>{{ pendingLabel }}</strong> — this cannot be undone.
+          </p>
+          <p class="muted">
+            This deletes:
+          </p>
+          <ul class="wipe-losses">
+            <li
+              v-for="line in pendingLosses"
+              :key="line.text"
+            >
+              {{ line.text }}
+            </li>
+          </ul>
+
+          <div class="wipe-gate">
+            <button
+              :disabled="!gameCount"
+              @click="exportAs('json')"
+            >
+              Export a backup first
+            </button>
+            <label for="wipe-gate">Type {{ confirmCount }} to confirm</label>
+            <input
+              id="wipe-gate"
+              v-model="typed"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+            >
+            <button
+              :disabled="wiping"
+              @click="cancelWipe"
+            >
+              Cancel
+            </button>
+            <button
+              class="danger"
+              :disabled="!armed || wiping || busy"
+              @click="confirmWipe"
+            >
+              <template v-if="wiping">
+                Deleting…
+              </template>
+              <template v-else>
+                Delete permanently
+              </template>
+            </button>
+          </div>
+          <p
+            v-if="wipeError"
+            class="error"
+          >
+            {{ wipeError }}
+          </p>
+        </div>
+      </section>
     </div>
   </div>
 </template>

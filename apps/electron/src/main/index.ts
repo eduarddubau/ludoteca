@@ -4,8 +4,10 @@ import {
 import { join, relative, isAbsolute } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
-  authenticate, cookies, database, http, secrets, STORE_PARTITION, type SerializedPattern
+  authenticate, cookies, database, http, secrets, sharedDataDir, STORE_PARTITION,
+  type SerializedPattern
 } from './platform.js'
+import { initialWindowState, keepWindowFitting, rememberWindowState, windowMinimums } from './window-state.js'
 import type { HttpRequest } from '@ludoteca/core'
 
 const isDev = process.env['LUDOTECA_DEV'] === '1'
@@ -155,9 +157,15 @@ function applyContentSecurityPolicy(): void {
 const ownWindowIds = new Set<number>()
 
 function createWindow(): void {
+  const state = initialWindowState(sharedDataDir())
+  const { maximized, ...bounds } = state
   const window = new BrowserWindow({
-    width: 1100,
-    height: 780,
+    ...bounds,
+    ...windowMinimums,
+    // Hidden until the first frame is painted, on the page's own background, so no stale or
+    // blank frame is shown while the window is sized, maximised and loaded.
+    show: false,
+    backgroundColor: '#14161a',
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
@@ -178,6 +186,12 @@ function createWindow(): void {
     return { action: 'deny' }
   })
   confineToApp(window)
+  window.once('ready-to-show', () => {
+    if (maximized) window.maximize()
+    window.show()
+  })
+  keepWindowFitting(window)
+  rememberWindowState(window, sharedDataDir())
 
   void window.loadURL(isDev ? DEV_URL : APP_ORIGIN)
 }

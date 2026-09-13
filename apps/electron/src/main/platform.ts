@@ -23,7 +23,7 @@ let db: Database.Database | undefined
 
 // Deliberately not app.getPath('userData'), which resolves per-shell: this literal
 // folder is what lets the Tauri build open the very same database.
-function sharedDataDir(): string {
+export function sharedDataDir(): string {
   const dir = join(app.getPath('appData'), 'ludoteca')
   mkdirSync(dir, { recursive: true })
   return dir
