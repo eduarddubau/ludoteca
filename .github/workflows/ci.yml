@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      # Node ships an older npm than devEngines requires. Exact version: a published npm
+      # version cannot be replaced, so this is as fixed as a lockfile entry.
+      - run: npm install --global npm@12.0.2 # zizmor: ignore[adhoc-packages]
+      - run: npm ci
+
+      # Before typecheck: packages/ui resolves @ludoteca/core through its built dist.
+      - run: npm run build
+      - run: npm run build --workspace @ludoteca/electron
+
+      - run: npm run typecheck
+      - run: npm run lint

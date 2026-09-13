@@ -11,8 +11,29 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # A week's wait: a compromised release is usually caught and pulled within days.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: ci
     groups:
       actions:
         patterns: ['*']
+
+  # Minor and patch updates arrive as one PR; each major gets its own, so CI tests it alone.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Types follow the Node that Electron bundles, not the newest Node. Raise by hand when
+      # Electron's Node major changes.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']

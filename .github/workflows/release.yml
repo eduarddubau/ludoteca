@@ -7,9 +7,9 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
-# Read by default; only the job that publishes gets write. The build job runs npm
-# install scripts and electron-builder's downloads, which is the last code that should
-# be holding a token that can rewrite the repository.
+# Read by default; only the job that publishes gets write. The build job runs dependency
+# code and electron-builder's downloads, which is the last code that should be holding a
+# token that can rewrite the repository.
 permissions:
   contents: read
 
@@ -32,14 +32,18 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      # Node 22: npm 11 gates install scripts behind an approval prompt that cannot be
-      # answered in CI, and this is also what tsup targets.
+      # No cache: shipped artifacts must not be built from one that CI runs can write.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
-          cache: npm
+          node-version-file: .node-version
+          package-manager-cache: false
 
+      # Node ships an older npm than devEngines requires. Exact version: a published npm
+      # version cannot be replaced, so this is as fixed as a lockfile entry.
+      - run: npm install --global npm@12.0.2 # zizmor: ignore[adhoc-packages]
       - run: npm ci
 
       # Must precede typecheck: packages/ui resolves @ludoteca/core to dist/index.d.ts,
