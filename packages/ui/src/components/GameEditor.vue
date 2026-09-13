@@ -100,7 +100,10 @@ function confirmAdd(): void {
   <div class="panel editor">
     <div class="editor-head">
       <h2>{{ adding ? 'Add a game' : 'Edit game' }}</h2>
-      <span v-if="!adding && manual" class="tag">Added by hand</span>
+      <span
+        v-if="!adding && manual"
+        class="tag"
+      >Added by hand</span>
     </div>
 
     <div class="field">
@@ -112,16 +115,28 @@ function confirmAdd(): void {
         autocomplete="off"
         placeholder="Exact title, as the store spells it"
         :class="{ edited: editedFields.includes('title') }"
-      />
+      >
       <p class="field-hint">
         Metadata is matched on this. Correct it, then fetch again if the wrong game was found.
       </p>
     </div>
 
-    <div v-if="adding" class="field">
+    <div
+      v-if="adding"
+      class="field"
+    >
       <label for="editor-store">Store</label>
-      <select id="editor-store" v-model="store">
-        <option v-for="id in STORE_IDS" :key="id" :value="id">{{ STORE_LABEL[id] }}</option>
+      <select
+        id="editor-store"
+        v-model="store"
+      >
+        <option
+          v-for="id in STORE_IDS"
+          :key="id"
+          :value="id"
+        >
+          {{ STORE_LABEL[id] }}
+        </option>
       </select>
     </div>
 
@@ -132,35 +147,74 @@ function confirmAdd(): void {
         v-model="platform"
         :class="{ edited: editedFields.includes('platform') }"
       >
-        <option v-for="id in PLATFORM_IDS" :key="id" :value="id">{{ PLATFORM_LABEL[id] }}</option>
+        <option
+          v-for="id in PLATFORM_IDS"
+          :key="id"
+          :value="id"
+        >
+          {{ PLATFORM_LABEL[id] }}
+        </option>
       </select>
-      <p class="field-hint">No store reports this, so console titles are set by hand.</p>
+      <p class="field-hint">
+        No store reports this, so console titles are set by hand.
+      </p>
     </div>
 
-    <label v-if="adding" class="check">
-      <input v-model="played" type="checkbox" /> I have played this
+    <label
+      v-if="adding"
+      class="check"
+    >
+      <input
+        v-model="played"
+        type="checkbox"
+      > I have played this
     </label>
 
     <div class="facts">
-      <div v-if="preview && matched" class="preview-head">
-        <img v-if="preview.coverUrl" :src="preview.coverUrl" alt="" class="preview-art" />
+      <div
+        v-if="preview && matched"
+        class="preview-head"
+      >
+        <img
+          v-if="preview.coverUrl"
+          :src="preview.coverUrl"
+          alt=""
+          class="preview-art"
+        >
         <div>
           <strong>{{ preview.title }}</strong>
-          <p class="muted field-hint">Matched on the store. Confirm this is the right game.</p>
+          <p class="muted field-hint">
+            Matched on the store. Confirm this is the right game.
+          </p>
         </div>
       </div>
-      <div v-for="fact in facts" :key="fact.label" class="fact">
+      <div
+        v-for="fact in facts"
+        :key="fact.label"
+        class="fact"
+      >
         <span class="fact-label">{{ fact.label }}</span>
         <span :class="['fact-value', { missing: !fact.value }]">
           {{ fact.value ?? 'Not fetched' }}
         </span>
       </div>
-      <p v-if="fetchError" class="error field-hint">{{ fetchError }}</p>
-      <p v-else-if="preview && !matched" class="field-hint">
+      <p
+        v-if="fetchError"
+        class="error field-hint"
+      >
+        {{ fetchError }}
+      </p>
+      <p
+        v-else-if="preview && !matched"
+        class="field-hint"
+      >
         No match found for “{{ preview.title }}”. Check the spelling and fetch again, or add
         it without metadata.
       </p>
-      <p v-else class="field-hint">
+      <p
+        v-else
+        class="field-hint"
+      >
         These come from the store and are not editable — a hand-typed score would not be true.
       </p>
     </div>
@@ -174,20 +228,39 @@ function confirmAdd(): void {
       >
         {{ fetching ? 'Fetching…' : 'Fetch metadata' }}
       </button>
-      <button v-if="adding" :disabled="!trimmed || fetching || submitting" @click="confirmAdd">
+      <button
+        v-if="adding"
+        :disabled="!trimmed || fetching || submitting"
+        @click="confirmAdd"
+      >
         {{ matched ? 'Add this game' : 'Add without metadata' }}
       </button>
 
-      <button v-if="!adding" class="primary" :disabled="!trimmed" @click="emit('save', changes)">
+      <button
+        v-if="!adding"
+        class="primary"
+        :disabled="!trimmed"
+        @click="emit('save', changes)"
+      >
         Save
       </button>
-      <button v-if="!adding" :disabled="!trimmed" @click="emit('refetch', changes)">
+      <button
+        v-if="!adding"
+        :disabled="!trimmed"
+        @click="emit('refetch', changes)"
+      >
         Fetch metadata
       </button>
 
-      <button @click="emit('close')">Cancel</button>
+      <button @click="emit('close')">
+        Cancel
+      </button>
       <span class="grow" />
-      <button v-if="!adding && manual" class="danger" @click="emit('remove')">
+      <button
+        v-if="!adding && manual"
+        class="danger"
+        @click="emit('remove')"
+      >
         Delete permanently
       </button>
     </div>

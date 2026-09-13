@@ -56,7 +56,11 @@ function since(iso: string | undefined): string {
     </div>
 
     <div class="stores">
-      <article v-for="profile in STORE_PROFILES" :key="profile.store" class="store-card">
+      <article
+        v-for="profile in STORE_PROFILES"
+        :key="profile.store"
+        class="store-card"
+      >
         <div class="store-head">
           <h2>{{ profile.label }}</h2>
           <span :class="['status', connectionFor(profile.store).status]">
@@ -64,22 +68,34 @@ function since(iso: string | undefined): string {
           </span>
         </div>
 
-        <p class="muted store-blurb">{{ profile.blurb }}</p>
+        <p class="muted store-blurb">
+          {{ profile.blurb }}
+        </p>
 
         <p class="store-stats muted">
           <template v-if="ownedByStore.get(profile.store)">
             {{ ownedByStore.get(profile.store) }} games in your library
           </template>
-          <template v-else>No games from here yet</template>
+          <template v-else>
+            No games from here yet
+          </template>
           <template v-if="connectionFor(profile.store).accountName">
             · {{ connectionFor(profile.store).accountName }}
           </template>
           · Last synced {{ since(connectionFor(profile.store).lastSyncedAt) }}
         </p>
 
-        <p v-if="profile.caveat" class="caveat">{{ profile.caveat }}</p>
+        <p
+          v-if="profile.caveat"
+          class="caveat"
+        >
+          {{ profile.caveat }}
+        </p>
 
-        <p v-if="connectionFor(profile.store).lastError" class="error store-error">
+        <p
+          v-if="connectionFor(profile.store).lastError"
+          class="error store-error"
+        >
           {{ connectionFor(profile.store).lastError }}
         </p>
 
@@ -91,11 +107,15 @@ function since(iso: string | undefined): string {
             "
             @click="library.connect(profile.store)"
           >
-            <template v-if="library.connecting.value === profile.store">Signing in…</template>
+            <template v-if="library.connecting.value === profile.store">
+              Signing in…
+            </template>
             <template v-else-if="!canConnect(connectionFor(profile.store))">
               Retry in {{ cooldownSeconds(connectionFor(profile.store)) }}s
             </template>
-            <template v-else>Connect…</template>
+            <template v-else>
+              Connect…
+            </template>
           </button>
 
           <button
@@ -103,8 +123,12 @@ function since(iso: string | undefined): string {
             :disabled="library.connecting.value !== null"
             @click="library.sync(profile.store)"
           >
-            <template v-if="library.connecting.value === profile.store">Syncing…</template>
-            <template v-else>Sync now</template>
+            <template v-if="library.connecting.value === profile.store">
+              Syncing…
+            </template>
+            <template v-else>
+              Sync now
+            </template>
           </button>
           <button
             v-if="connectionFor(profile.store).status === 'connected'"

@@ -41,28 +41,63 @@ onMounted(search)
 <template>
   <div class="picker">
     <div class="picker-head">
-      <input v-model="query" type="search" @keyup.enter="search" />
-      <button @click="search">Search</button>
-      <button @click="emit('skip')">Skip</button>
+      <input
+        v-model="query"
+        type="search"
+        @keyup.enter="search"
+      >
+      <button @click="search">
+        Search
+      </button>
+      <button @click="emit('skip')">
+        Skip
+      </button>
     </div>
 
-    <p v-if="loading" class="muted">Searching Steam…</p>
-    <p v-else-if="error" class="error">{{ error }}</p>
-    <p v-else-if="!candidates.length" class="muted">
+    <p
+      v-if="loading"
+      class="muted"
+    >
+      Searching Steam…
+    </p>
+    <p
+      v-else-if="error"
+      class="error"
+    >
+      {{ error }}
+    </p>
+    <p
+      v-else-if="!candidates.length"
+      class="muted"
+    >
       Steam returned nothing for that title. Try a shorter or different search.
     </p>
 
-    <div v-else class="candidates">
+    <div
+      v-else
+      class="candidates"
+    >
       <button
         v-for="candidate in candidates"
         :key="candidate.appId"
         class="candidate"
         @click="emit('pick', candidate.appId)"
       >
-        <img v-if="candidate.coverUrl" :src="candidate.coverUrl" :alt="candidate.name" loading="lazy" />
-        <span v-else class="candidate-noart muted">No cover art</span>
+        <img
+          v-if="candidate.coverUrl"
+          :src="candidate.coverUrl"
+          :alt="candidate.name"
+          loading="lazy"
+        >
+        <span
+          v-else
+          class="candidate-noart muted"
+        >No cover art</span>
         <span class="candidate-name">{{ candidate.name }}</span>
-        <span v-if="candidate.exact" class="candidate-exact">exact</span>
+        <span
+          v-if="candidate.exact"
+          class="candidate-exact"
+        >exact</span>
       </button>
     </div>
   </div>

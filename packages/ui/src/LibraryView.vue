@@ -219,17 +219,33 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
     </p>
 
     <div class="toolbar">
-      <input v-model="search" type="search" placeholder="Search titles…" />
+      <input
+        v-model="search"
+        type="search"
+        placeholder="Search titles…"
+      >
 
       <div class="group">
         <div class="segmented">
-          <button :class="{ on: view === 'grid' }" @click="view = 'grid'">Grid</button>
-          <button :class="{ on: view === 'list' }" @click="view = 'list'">List</button>
+          <button
+            :class="{ on: view === 'grid' }"
+            @click="view = 'grid'"
+          >
+            Grid
+          </button>
+          <button
+            :class="{ on: view === 'list' }"
+            @click="view = 'list'"
+          >
+            List
+          </button>
         </div>
       </div>
 
       <div class="group">
-        <button @click="closeEditor(); adding = true">Add game…</button>
+        <button @click="closeEditor(); adding = true">
+          Add game…
+        </button>
       </div>
     </div>
 
@@ -261,7 +277,10 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
       @close="closeEditor"
     />
 
-    <div v-if="library.games.value.length" class="filters">
+    <div
+      v-if="library.games.value.length"
+      class="filters"
+    >
       <span class="muted">Store</span>
       <button
         v-for="store in storeOptions"
@@ -320,12 +339,18 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
       />
 
       <span class="muted spacer">Hidden</span>
-      <button :class="{ on: showHidden }" @click="showHidden = !showHidden">
+      <button
+        :class="{ on: showHidden }"
+        @click="showHidden = !showHidden"
+      >
         Show hidden ({{ library.hiddenEntries.value.length }})
       </button>
     </div>
 
-    <div v-if="library.games.value.length" class="filters">
+    <div
+      v-if="library.games.value.length"
+      class="filters"
+    >
       <span class="muted">Sort</span>
       <button
         v-for="option in SORT_OPTIONS"
@@ -338,9 +363,14 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
       </button>
     </div>
 
-    <p v-if="!library.games.value.length" class="muted panel empty-library">
+    <p
+      v-if="!library.games.value.length"
+      class="muted panel empty-library"
+    >
       <span>No games yet. Importing a file and loading the sample data both live in Settings.</span>
-      <button @click="emit('navigate', 'settings')">Open Settings</button>
+      <button @click="emit('navigate', 'settings')">
+        Open Settings
+      </button>
     </p>
     <LibraryGrid
       v-else-if="view === 'grid'"

@@ -23,20 +23,36 @@ const shown = computed(() => {
 
 <template>
   <div class="menu-anchor">
-    <button :class="{ on: selected.size > 0 }" @click="open = !open">
-      {{ label }}<template v-if="selected.size">: {{ selected.size }}</template>
+    <button
+      :class="{ on: selected.size > 0 }"
+      @click="open = !open"
+    >
+      {{ label }}<template v-if="selected.size">
+        : {{ selected.size }}
+      </template>
     </button>
 
-    <div v-if="open" class="menu-backdrop" @click="open = false" />
-    <div v-if="open" class="menu menu-scroll">
+    <div
+      v-if="open"
+      class="menu-backdrop"
+      @click="open = false"
+    />
+    <div
+      v-if="open"
+      class="menu menu-scroll"
+    >
       <input
         v-if="searchable"
         v-model="query"
         type="search"
         class="menu-search"
         :placeholder="`Search ${label.toLowerCase()}…`"
-      />
-      <button v-if="selected.size" class="menu-clear" @click="emit('clear')">
+      >
+      <button
+        v-if="selected.size"
+        class="menu-clear"
+        @click="emit('clear')"
+      >
         Clear selection
       </button>
 
@@ -50,7 +66,12 @@ const shown = computed(() => {
         <span class="muted">{{ count }}</span>
       </button>
 
-      <p v-if="!shown.length" class="muted menu-empty">Nothing matches that search.</p>
+      <p
+        v-if="!shown.length"
+        class="muted menu-empty"
+      >
+        Nothing matches that search.
+      </p>
     </div>
   </div>
 </template>

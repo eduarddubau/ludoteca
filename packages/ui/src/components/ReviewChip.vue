@@ -16,7 +16,11 @@ const title = computed(() =>
 </script>
 
 <template>
-  <span class="review" :class="band" :title="title">
+  <span
+    class="review"
+    :class="band"
+    :title="title"
+  >
     {{ percent === undefined ? '–' : `${percent}%` }}
   </span>
 </template>

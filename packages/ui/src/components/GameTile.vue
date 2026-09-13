@@ -24,12 +24,25 @@ const hours = computed(() =>
 <template>
   <article class="tile">
     <div class="art">
-      <img v-if="entry.coverUrl" :src="entry.coverUrl" :alt="entry.title" loading="lazy" />
-      <div v-else class="art-fallback"><span>{{ entry.title }}</span></div>
+      <img
+        v-if="entry.coverUrl"
+        :src="entry.coverUrl"
+        :alt="entry.title"
+        loading="lazy"
+      >
+      <div
+        v-else
+        class="art-fallback"
+      >
+        <span>{{ entry.title }}</span>
+      </div>
 
       <div class="scrim">
         <StoreLinks :entry="entry" />
-        <span v-if="hours" class="hours">{{ hours }}</span>
+        <span
+          v-if="hours"
+          class="hours"
+        >{{ hours }}</span>
       </div>
 
       <ScoreChip
@@ -55,13 +68,29 @@ const hours = computed(() =>
         >
           ↻
         </button>
-        <button title="Edit this game" @click="emit('edit', entry)">✎</button>
-        <button title="Hide or unhide" @click="emit('hide', entry)">⊘</button>
+        <button
+          title="Edit this game"
+          @click="emit('edit', entry)"
+        >
+          ✎
+        </button>
+        <button
+          title="Hide or unhide"
+          @click="emit('hide', entry)"
+        >
+          ⊘
+        </button>
       </div>
     </div>
 
     <div class="meta">
-      <a :href="primary.url" target="_blank" rel="noreferrer" class="title" :title="entry.title">
+      <a
+        :href="primary.url"
+        target="_blank"
+        rel="noreferrer"
+        class="title"
+        :title="entry.title"
+      >
         {{ entry.title }}
       </a>
       <p class="muted sub">

@@ -27,25 +27,56 @@ const runLabel = computed(() => {
       <h1>Ludoteca</h1>
 
       <nav class="tabs">
-        <button :class="{ on: tab === 'library' }" @click="tab = 'library'">Library</button>
-        <button :class="{ on: tab === 'metadata' }" @click="tab = 'metadata'">
+        <button
+          :class="{ on: tab === 'library' }"
+          @click="tab = 'library'"
+        >
+          Library
+        </button>
+        <button
+          :class="{ on: tab === 'metadata' }"
+          @click="tab = 'metadata'"
+        >
           Metadata
-          <span v-if="library.unresolved.value.length" class="badge">
+          <span
+            v-if="library.unresolved.value.length"
+            class="badge"
+          >
             {{ library.unresolved.value.length }}
           </span>
         </button>
-        <button :class="{ on: tab === 'stores' }" @click="tab = 'stores'">Stores</button>
-        <button :class="{ on: tab === 'settings' }" @click="tab = 'settings'">Settings</button>
+        <button
+          :class="{ on: tab === 'stores' }"
+          @click="tab = 'stores'"
+        >
+          Stores
+        </button>
+        <button
+          :class="{ on: tab === 'settings' }"
+          @click="tab = 'settings'"
+        >
+          Settings
+        </button>
       </nav>
 
-      <span v-if="runLabel" class="running" title="Metadata fetch in progress">
+      <span
+        v-if="runLabel"
+        class="running"
+        title="Metadata fetch in progress"
+      >
         Fetching {{ runLabel }}
       </span>
     </header>
 
-    <LibraryView v-if="tab === 'library'" @navigate="tab = $event" />
+    <LibraryView
+      v-if="tab === 'library'"
+      @navigate="tab = $event"
+    />
     <MetadataView v-else-if="tab === 'metadata'" />
     <StoresView v-else-if="tab === 'stores'" />
-    <SettingsView v-else @navigate="tab = $event" />
+    <SettingsView
+      v-else
+      @navigate="tab = $event"
+    />
   </div>
 </template>

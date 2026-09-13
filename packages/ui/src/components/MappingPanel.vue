@@ -36,24 +36,44 @@ function confirm(): void {
     </p>
 
     <div class="mapping">
-      <div v-for="field in FIELDS" :key="field.key" class="row">
+      <div
+        v-for="field in FIELDS"
+        :key="field.key"
+        class="row"
+      >
         <label>{{ field.label }}</label>
         <select v-model="mapping[field.key]">
-          <option value="">— not mapped —</option>
-          <option v-for="header in parsed.headers" :key="header" :value="header">
+          <option value="">
+            — not mapped —
+          </option>
+          <option
+            v-for="header in parsed.headers"
+            :key="header"
+            :value="header"
+          >
             {{ header }}
           </option>
         </select>
       </div>
     </div>
 
-    <p v-if="error" class="error">{{ error }}</p>
+    <p
+      v-if="error"
+      class="error"
+    >
+      {{ error }}
+    </p>
 
     <div class="actions">
-      <button :disabled="!mapping.title" @click="confirm">
+      <button
+        :disabled="!mapping.title"
+        @click="confirm"
+      >
         Import {{ parsed.rows.length }} rows
       </button>
-      <button @click="emit('cancel')">Cancel</button>
+      <button @click="emit('cancel')">
+        Cancel
+      </button>
     </div>
   </div>
 </template>

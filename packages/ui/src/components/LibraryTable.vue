@@ -65,8 +65,15 @@ function cell(entry: LibraryEntry, key: ColumnKey): string {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="entry in entries" :key="entry.key">
-          <td v-for="column in COLUMNS" :key="column.key" :class="`col-${column.key}`">
+        <tr
+          v-for="entry in entries"
+          :key="entry.key"
+        >
+          <td
+            v-for="column in COLUMNS"
+            :key="column.key"
+            :class="`col-${column.key}`"
+          >
             <ScoreChip
               v-if="column.key === 'criticScore'"
               :score="entry.criticScore"
@@ -80,8 +87,13 @@ function cell(entry: LibraryEntry, key: ColumnKey): string {
               :count="entry.steamReviewCount"
               :label="entry.steamReviewLabel"
             />
-            <StoreLinks v-else-if="column.key === 'stores'" :entry="entry" />
-            <template v-else>{{ cell(entry, column.key) }}</template>
+            <StoreLinks
+              v-else-if="column.key === 'stores'"
+              :entry="entry"
+            />
+            <template v-else>
+              {{ cell(entry, column.key) }}
+            </template>
           </td>
           <td class="col-actions">
             <button
@@ -92,12 +104,29 @@ function cell(entry: LibraryEntry, key: ColumnKey): string {
             >
               ↻
             </button>
-            <button class="row-enrich" title="Edit this game" @click="emit('edit', entry)">✎</button>
-            <button class="row-enrich" title="Hide or unhide" @click="emit('hide', entry)">⊘</button>
+            <button
+              class="row-enrich"
+              title="Edit this game"
+              @click="emit('edit', entry)"
+            >
+              ✎
+            </button>
+            <button
+              class="row-enrich"
+              title="Hide or unhide"
+              @click="emit('hide', entry)"
+            >
+              ⊘
+            </button>
           </td>
         </tr>
       </tbody>
     </table>
-    <p v-if="!entries.length" class="muted empty">Nothing matches those filters.</p>
+    <p
+      v-if="!entries.length"
+      class="muted empty"
+    >
+      Nothing matches those filters.
+    </p>
   </div>
 </template>

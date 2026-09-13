@@ -11,7 +11,10 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div v-if="entries.length" class="grid">
+  <div
+    v-if="entries.length"
+    class="grid"
+  >
     <GameTile
       v-for="entry in entries"
       :key="entry.key"
@@ -22,5 +25,10 @@ const emit = defineEmits<{
       @hide="emit('hide', $event)"
     />
   </div>
-  <p v-else class="muted panel">Nothing matches those filters.</p>
+  <p
+    v-else
+    class="muted panel"
+  >
+    Nothing matches those filters.
+  </p>
 </template>
