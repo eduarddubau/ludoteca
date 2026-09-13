@@ -122,7 +122,6 @@ select,
   padding: 6px 8px;
 }
 input[type='file'] { color: var(--muted); }
-.cap { text-transform: capitalize; }
 
 /* ---- view toggle ---- */
 .segmented { display: flex; }

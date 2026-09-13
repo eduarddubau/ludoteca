@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { OwnedGame } from '@ludoteca/core'
+import { STORE_LABEL, type OwnedGame } from '@ludoteca/core'
 import { useLibrary } from './lib/store'
 import MatchPicker from './components/MatchPicker.vue'
 import { clock, roughly, timeLeft } from './lib/time'
@@ -51,7 +51,7 @@ async function applyPick(appId: number): Promise<void> {
       >
         <span class="bar-main">
           <strong>{{ library.runStatus.value.phase }}</strong>
-          · {{ library.runStatus.value.done }} / {{ library.runStatus.value.total }} ({{ barPercent }}%)
+          · {{ library.runStatus.value.done }} / {{ library.runStatus.value.total }}
           · {{ timeLeft(library.runStatus.value.secondsLeft) }}
         </span>
         <span class="bar-detail muted">
@@ -67,7 +67,7 @@ async function applyPick(appId: number): Promise<void> {
         v-else
         class="bar-label muted"
       >
-        {{ percent }}% of {{ library.games.value.length }} have metadata
+        {{ library.resolved.value.length }} / {{ library.games.value.length }} have metadata
       </span>
 
       <button
@@ -184,7 +184,8 @@ async function applyPick(appId: number): Promise<void> {
           </template>
         </p>
         <button
-          :disabled="!library.wikiPass.value.apps || library.running.value"
+          v-if="library.wikiPass.value.apps"
+          :disabled="library.running.value"
           @click="library.fillFromWiki()"
         >
           Look up {{ library.wikiPass.value.apps }} games on PCGamingWiki
@@ -232,8 +233,8 @@ async function applyPick(appId: number): Promise<void> {
             :key="`${game.store}:${game.storeGameId}`"
           >
             <td>{{ game.title }}</td>
-            <td class="cap col-stores">
-              {{ game.store }}
+            <td class="col-stores">
+              {{ STORE_LABEL[game.store] }}
             </td>
             <td class="col-hours">
               <button @click="picking = game">
