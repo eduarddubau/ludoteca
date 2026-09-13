@@ -83,7 +83,7 @@ input[type='search'] {
   margin-top: 12px;
 }
 .filters .spacer { margin-left: 12px; }
-.filters button { padding: 4px 10px; font-size: 13px; text-transform: capitalize; }
+.filters button { padding: 4px 10px; font-size: 13px; }
 .filters button.on { border-color: var(--accent); color: var(--accent); }
 
 .table-wrap {
@@ -232,7 +232,7 @@ input[type='file'] { color: var(--muted); }
   white-space: nowrap;
 }
 .meta .title:hover { color: var(--accent); text-decoration: underline; }
-.meta .sub { margin: 2px 0 0; font-size: 12px; text-transform: capitalize; }
+.meta .sub { margin: 2px 0 0; font-size: 12px; }
 
 /* ---- rating chips: a filled score, and when labelled an outlined source name before it.
    The name is what tells Metacritic from Steam, so both scores fill alike. Bands follow
@@ -273,10 +273,6 @@ input[type='file'] { color: var(--muted); }
 }
 .rating-label + .rating-value { border-radius: 0 4px 4px 0; }
 .rating.none .rating-value { color: var(--muted); }
-
-.links a { color: var(--accent); text-transform: capitalize; }
-/* A search fallback, not the game's own page. */
-.links a.approx { color: var(--muted); text-decoration: underline dotted; }
 
 /* Per-game enrichment, shown only on games never attempted. */
 .row-enrich {
@@ -354,7 +350,6 @@ td.col-hours, td.col-releaseYear { text-align: right; }
 .store-links { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 .store-link {
   color: var(--accent);
-  text-transform: capitalize;
   text-decoration: none;
   font-size: 12px;
   padding: 1px 6px;

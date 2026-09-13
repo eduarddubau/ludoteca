@@ -140,9 +140,14 @@ async function onFileChosen(event: Event): Promise<void> {
 }
 
 async function confirmImport(next: ExportedGame[]): Promise<void> {
-  await library.importGames(next)
-  imported.value = next.length
-  pendingCsv.value = null
+  importError.value = ''
+  try {
+    await library.importGames(next)
+    imported.value = next.length
+    pendingCsv.value = null
+  } catch (err) {
+    importError.value = err instanceof Error ? err.message : String(err)
+  }
 }
 
 function download(filename: string, contents: string, mime: string): void {
@@ -159,11 +164,9 @@ function download(filename: string, contents: string, mime: string): void {
 function backup(): ExportedGame[] {
   return library.games.value.map((game) => {
     const user = library.userDataFor(game)
-    return {
-      ...game,
-      hidden: user.hidden,
-      ...(Object.keys(user.overrides).length ? { overrides: user.overrides } : {})
-    }
+    // Empty overrides are written too, so restoring clears edits made after the backup,
+    // as the CSV's blank column does.
+    return { ...game, hidden: user.hidden, overrides: user.overrides }
   })
 }
 

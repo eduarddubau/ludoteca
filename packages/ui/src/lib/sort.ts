@@ -44,7 +44,7 @@ export const COLUMNS: Column[] = [
   { key: 'genres', label: 'Genres', sortable: false },
   { key: 'developer', label: 'Developer', sortable: false },
   { key: 'publisher', label: 'Publisher', sortable: false },
-  { key: 'releaseYear', label: 'Release Date', sortable: true }
+  { key: 'releaseYear', label: 'Release date', sortable: true }
 ]
 
 export const SORT_OPTIONS = COLUMNS.filter((column) => column.sortable).map((column) => ({
