@@ -10,8 +10,5 @@ out
 # match a symlink.
 .claude
 
-# Spike credentials. A refresh token is a live Steam session.
-*.token.json
-
 # Packaged output
 release/

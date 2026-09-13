@@ -23,7 +23,7 @@ const shellFree = {
 }
 
 export default ts.config(
-  { ignores: ['**/dist/**', '**/out/**', '**/node_modules/**', 'spikes/**'] },
+  { ignores: ['**/dist/**', '**/out/**', '**/node_modules/**'] },
   js.configs.recommended,
   ...ts.configs.recommended,
   ...vue.configs['flat/recommended'],
