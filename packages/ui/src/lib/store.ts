@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import {
-  applyUserData, createConnector, enrichLibrary, enrichWithAppId, gameKey,
+  applyUserData, createConnector, enrichLibrary, enrichWithAppId, gameKey, refreshSteamReviews,
+  steamAppId,
   type ExportedGame,
   mergeLibrary,
   needsEnrichment, preserveEnrichment, reconcileImport,
@@ -61,6 +62,7 @@ export function useLibrary() {
     return [
       { label: 'Cover art', count: has((g) => g.coverUrl), total },
       { label: 'Metacritic score', count: has((g) => g.criticScore), total },
+      { label: 'Steam reviews', count: has((g) => g.steamReviewPercent), total },
       { label: 'Genres', count: has((g) => g.genres), total },
       { label: 'Release year', count: has((g) => g.releaseYear), total },
       { label: 'Developer', count: has((g) => g.developer), total },
@@ -263,7 +265,9 @@ export function useLibrary() {
     return games.value.map((game) => updated.get(keyOf(game)) ?? game)
   }
 
-  async function enrich(target: OwnedGame[], force: boolean): Promise<void> {
+  /** `withReviews` also refreshes every game's Steam review score, for runs over the whole
+   *  library: those drift, and the refresh is a few batched requests rather than a search each. */
+  async function enrich(target: OwnedGame[], force: boolean, withReviews = false): Promise<void> {
     if (running.value) return
     const platform = usePlatform()
     abort.value = { aborted: false }
@@ -275,7 +279,7 @@ export function useLibrary() {
       matched: false
     }
     try {
-      const next = await enrichLibrary(platform, target, {
+      let next = await enrichLibrary(platform, target, {
         force,
         signal: abort.value,
         onProgress: (p) => (progress.value = p),
@@ -284,6 +288,33 @@ export function useLibrary() {
           await replaceGames(platform, merged)
           games.value = merged
         }
+      })
+      if (withReviews && !abort.value.aborted) {
+        next = await refreshSteamReviews(platform, merge(next), {
+          signal: abort.value,
+          onProgress: (p) => (progress.value = p)
+        })
+      }
+      await replaceAll(merge(next))
+    } catch (err) {
+      enrichError.value = err instanceof Error ? err.message : String(err)
+      await reload()
+    } finally {
+      progress.value = null
+    }
+  }
+
+  async function updateReviews(): Promise<void> {
+    if (running.value) return
+    const platform = usePlatform()
+    abort.value = { aborted: false }
+    enrichError.value = ''
+    const apps = new Set(games.value.map(steamAppId).filter((id) => id !== undefined))
+    progress.value = { done: 0, total: apps.size, title: 'Steam reviews', matched: true }
+    try {
+      const next = await refreshSteamReviews(platform, games.value, {
+        signal: abort.value,
+        onProgress: (p) => (progress.value = p)
       })
       await replaceAll(merge(next))
     } catch (err) {
@@ -323,6 +354,6 @@ export function useLibrary() {
     connections, connecting, connect, sync, disconnect,
     progress, enrichError, running,
     stop: () => (abort.value.aborted = true),
-    reload, replaceAll, enrich, applyMatch, previewMetadata, wipe
+    reload, replaceAll, enrich, updateReviews, applyMatch, previewMetadata, wipe
   }
 }

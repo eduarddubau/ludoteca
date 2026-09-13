@@ -41,8 +41,8 @@
 
 You own games in three places and can't answer *"what should I play?"* without opening three
 launchers. Ludoteca reads all of them into one local database and lets you sort by Metacritic
-score, playtime, release date or title, then filter by store, platform, genre, developer,
-publisher or shelf.
+score, Steam review score, playtime, release date or title, then filter by store, platform,
+genre, developer, publisher or shelf.
 
 **Family-shared games are first-class.** On Steam, the library you can *play* is much larger
 than the library you *own* — a real account here has 213 owned and 489 shared. Most tools
@@ -58,6 +58,13 @@ release year come from Steam's public endpoints — no API key — including for
 titles, since a Metacritic score is the same score wherever the game was bought. What you can
 edit is the game's *identity*: correct a title and fetch again. There's no field for typing a
 score by hand, because a hand-typed score isn't one.
+
+**Critics and players are scored apart.** Steam's review score — the share of players who
+recommend a game — sits beside the Metacritic chip as its own outlined chip, column and sort,
+never in the Metacritic slot. The two measure different things: across one 279-game library
+Steam ran a median 7 points higher, and Goat Simulator is 62 on Metacritic but 90% on Steam.
+Review scores drift, so **Update Steam reviews** refreshes the whole library in a few batched
+requests without searching again.
 
 <p align="center">
   <img src="docs/add-game.png" width="820"

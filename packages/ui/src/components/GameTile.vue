@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { entryMetacriticLink, SHELF_LABEL, sourceLink, type LibraryEntry } from '@ludoteca/core'
+import ReviewChip from './ReviewChip.vue'
 import ScoreChip from './ScoreChip.vue'
 import StoreLinks from './StoreLinks.vue'
 
@@ -36,6 +37,13 @@ const hours = computed(() =>
         :score="entry.criticScore"
         :href="metacritic.url"
         :exact="metacritic.exact"
+      />
+      <ReviewChip
+        v-if="entry.steamReviewPercent !== undefined"
+        class="tile-review"
+        :percent="entry.steamReviewPercent"
+        :count="entry.steamReviewCount"
+        :label="entry.steamReviewLabel"
       />
 
       <div class="tile-actions">

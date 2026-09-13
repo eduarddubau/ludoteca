@@ -60,7 +60,14 @@ const matched = computed(() => props.preview?.storeUrl !== undefined)
 const facts = computed(() => {
   const game = props.preview ?? props.entry
   return [
-    { label: 'Score', value: game?.criticScore?.toString() },
+    { label: 'Metacritic', value: game?.criticScore?.toString() },
+    {
+      label: 'Steam reviews',
+      value:
+        game?.steamReviewPercent === undefined
+          ? undefined
+          : `${game.steamReviewPercent}% · ${game.steamReviewLabel} (${game.steamReviewCount?.toLocaleString()})`
+    },
     { label: 'Released', value: game?.releaseYear?.toString() },
     { label: 'Genres', value: game?.genres.join(', ') || undefined },
     { label: 'Developer', value: game?.developer },

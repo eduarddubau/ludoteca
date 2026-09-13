@@ -112,6 +112,9 @@ export function preserveEnrichment(fetched: OwnedGame[], existing: OwnedGame[]):
       publisher: previous.publisher,
       criticScore: previous.criticScore,
       metacriticUrl: previous.metacriticUrl,
+      steamReviewPercent: previous.steamReviewPercent,
+      steamReviewCount: previous.steamReviewCount,
+      steamReviewLabel: previous.steamReviewLabel,
       coverUrl: previous.coverUrl ?? game.coverUrl,
       enrichedAt: previous.enrichedAt,
       // Playtime a store does report should win; GOG reports none, so keep what we had.

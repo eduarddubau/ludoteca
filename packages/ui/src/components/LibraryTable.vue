@@ -3,6 +3,7 @@ import {
   entryMetacriticLink, PLATFORM_LABEL, SHELF_LABEL, type LibraryEntry
 } from '@ludoteca/core'
 import { COLUMNS, type ColumnKey, type SortKey } from '../lib/sort'
+import ReviewChip from './ReviewChip.vue'
 import ScoreChip from './ScoreChip.vue'
 import StoreLinks from './StoreLinks.vue'
 
@@ -71,6 +72,12 @@ function cell(entry: LibraryEntry, key: ColumnKey): string {
               :score="entry.criticScore"
               :href="entryMetacriticLink(entry).url"
               :exact="entryMetacriticLink(entry).exact"
+            />
+            <ReviewChip
+              v-else-if="column.key === 'steamReviews'"
+              :percent="entry.steamReviewPercent"
+              :count="entry.steamReviewCount"
+              :label="entry.steamReviewLabel"
             />
             <StoreLinks v-else-if="column.key === 'stores'" :entry="entry" />
             <template v-else>{{ cell(entry, column.key) }}</template>

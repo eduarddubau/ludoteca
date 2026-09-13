@@ -51,6 +51,13 @@ export interface OwnedGame {
   publisher?: string
   criticScore?: number
   metacriticUrl?: string
+  /** Share of Steam reviews recommending the game. Player sentiment on its own scale — a
+   *  median 7 points above Metacritic across a 279-game library — so it sits beside
+   *  criticScore and never fills it. */
+  steamReviewPercent?: number
+  steamReviewCount?: number
+  /** Steam's own wording, such as "Very Positive". */
+  steamReviewLabel?: string
   storeUrl?: string
   userRating?: number
   lastPlayedAt?: string

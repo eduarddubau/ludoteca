@@ -59,6 +59,9 @@ export interface LibraryEntry {
   publisher?: string
   criticScore?: number
   metacriticUrl?: string
+  steamReviewPercent?: number
+  steamReviewCount?: number
+  steamReviewLabel?: string
   coverUrl?: string
   enrichedAt?: string
 }
@@ -108,6 +111,8 @@ export function mergeLibrary(games: OwnedGame[]): LibraryEntry[] {
 
     const first = <T>(pick: (game: OwnedGame) => T | undefined): T | undefined =>
       group.map(pick).find((value) => value !== undefined)
+    // From one row, so a percentage is never shown against another row's review count.
+    const reviewed = group.find((game) => game.steamReviewPercent !== undefined)
 
     return {
       key,
@@ -132,6 +137,9 @@ export function mergeLibrary(games: OwnedGame[]): LibraryEntry[] {
       publisher: first((game) => game.publisher),
       criticScore: first((game) => game.criticScore),
       metacriticUrl: first((game) => game.metacriticUrl),
+      steamReviewPercent: reviewed?.steamReviewPercent,
+      steamReviewCount: reviewed?.steamReviewCount,
+      steamReviewLabel: reviewed?.steamReviewLabel,
       coverUrl: first((game) => game.coverUrl),
       enrichedAt: first((game) => game.enrichedAt)
     }

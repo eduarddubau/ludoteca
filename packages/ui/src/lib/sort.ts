@@ -2,6 +2,7 @@ import type { LibraryEntry } from '@ludoteca/core'
 
 export type ColumnKey =
   | 'criticScore'
+  | 'steamReviews'
   | 'title'
   | 'stores'
   | 'platforms'
@@ -17,7 +18,7 @@ export type ColumnKey =
  * you nothing you could not get by selecting one. Only ordinal fields — and the
  * alphabetical fallback — belong in the sort menu.
  */
-export type SortKey = 'criticScore' | 'title' | 'hours' | 'releaseYear'
+export type SortKey = 'criticScore' | 'steamReviews' | 'title' | 'hours' | 'releaseYear'
 
 interface Column {
   key: ColumnKey
@@ -30,7 +31,10 @@ interface Column {
 
 // One definition drives the headers, the cells and the sort menu, so none can drift.
 export const COLUMNS: Column[] = [
-  { key: 'criticScore', label: 'Score', sortable: true },
+  // Two scores, two columns: critics and players sit on different scales, so neither may
+  // stand in for the other in one ordering.
+  { key: 'criticScore', label: 'Metacritic', sortable: true },
+  { key: 'steamReviews', label: 'Steam', sortLabel: 'Steam reviews', sortable: true },
   { key: 'title', label: 'Title', sortLabel: 'Alphabetically', sortable: true },
   { key: 'stores', label: 'Stores', sortable: false },
   { key: 'platforms', label: 'Platform', sortable: false },
@@ -55,6 +59,8 @@ function rank(entry: LibraryEntry, key: SortKey): number | string {
       return entry.playtimeMinutes ?? -1
     case 'criticScore':
       return entry.criticScore ?? -1
+    case 'steamReviews':
+      return entry.steamReviewPercent ?? -1
     case 'releaseYear':
       return entry.releaseYear ?? -1
     default:

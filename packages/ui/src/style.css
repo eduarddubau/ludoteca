@@ -179,6 +179,25 @@ input[type='file'] { color: var(--muted); }
 .hours { color: #d6dae2; }
 
 .tile-score { position: absolute; top: 8px; right: 8px; }
+.tile-review { position: absolute; top: 34px; right: 8px; }
+
+/* Outlined rather than filled, so a player percentage never reads as a critic score. */
+.review {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(16, 19, 26, 0.85);
+}
+.review.good { color: #6ec664; }
+.review.mixed { color: #e4c65b; }
+.review.bad { color: #e0776b; }
+.review.none { color: var(--muted); border-color: var(--border); }
 
 .meta { padding: 8px 10px 10px; }
 .meta .title {

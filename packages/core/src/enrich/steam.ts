@@ -174,33 +174,101 @@ async function fetchDetails(platform: Platform, appId: number): Promise<AppDetai
 interface StoreItem {
   appid: number
   assets?: { asset_url_format?: string; library_capsule?: string }
+  reviews?: {
+    summary_filtered?: {
+      review_count: number
+      percent_positive: number
+      review_score: number
+      review_score_label: string
+    }
+  }
 }
 
 const ASSET_HOST = 'https://shared.akamai.steamstatic.com/store_item_assets/'
+const STORE_ITEMS_PER_REQUEST = 100
 
-/**
- * Portrait covers keyed by app, at the paths Steam actually serves. Newer apps keep their
- * art under a hashed directory, so a URL built from the app id alone 404s — and a stored
- * dead link counts as a resolved cover, so nothing flagged the ten that had one.
- */
-async function fetchCovers(platform: Platform, appIds: number[]): Promise<Map<number, string>> {
-  const covers = new Map<number, string>()
-  if (!appIds.length) return covers
+/** Art and review summaries for up to a hundred apps in one request, keyed by app. */
+async function fetchStoreItems(platform: Platform, appIds: number[]): Promise<Map<number, StoreItem>> {
+  const items = new Map<number, StoreItem>()
+  if (!appIds.length) return items
 
   const input = {
     ids: appIds.map((appid) => ({ appid })),
     context: { language: 'english', country_code: 'US' },
-    data_request: { include_assets: true }
+    data_request: { include_assets: true, include_reviews: true }
   }
   const url = `https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json=${encodeURIComponent(JSON.stringify(input))}`
   const result = await json<{ response?: { store_items?: StoreItem[] } }>(platform, url)
 
-  for (const item of result?.response?.store_items ?? []) {
-    const format = item.assets?.asset_url_format
-    const capsule = item.assets?.library_capsule
-    if (format && capsule) covers.set(item.appid, ASSET_HOST + format.replace('${FILENAME}', capsule))
+  for (const item of result?.response?.store_items ?? []) items.set(item.appid, item)
+  return items
+}
+
+/**
+ * The portrait cover at the path Steam actually serves. Newer apps keep their art under a
+ * hashed directory, so a URL built from the app id alone 404s — and a stored dead link
+ * counts as a resolved cover, so nothing flagged the ten that had one.
+ */
+function coverOf(item: StoreItem | undefined): string | undefined {
+  const format = item?.assets?.asset_url_format
+  const capsule = item?.assets?.library_capsule
+  return format && capsule ? ASSET_HOST + format.replace('${FILENAME}', capsule) : undefined
+}
+
+type ReviewFields = Pick<OwnedGame, 'steamReviewPercent' | 'steamReviewCount' | 'steamReviewLabel'>
+
+/** All three set together, or all three cleared: a percentage without its count misleads. */
+function reviewsOf(item: StoreItem | undefined): ReviewFields {
+  const summary = item?.reviews?.summary_filtered
+  // A review_score of 0 is Steam declining to rate: no reviews, or too few to call.
+  if (!summary?.review_score) {
+    return { steamReviewPercent: undefined, steamReviewCount: undefined, steamReviewLabel: undefined }
   }
-  return covers
+  return {
+    steamReviewPercent: summary.percent_positive,
+    steamReviewCount: summary.review_count,
+    steamReviewLabel: summary.review_score_label
+  }
+}
+
+/** The Steam app a game is known by: the one a match stored, or its own id on Steam. */
+export function steamAppId(game: OwnedGame): number | undefined {
+  const matched = game.storeUrl?.match(/store\.steampowered\.com\/app\/(\d+)/)
+  if (matched) return Number(matched[1])
+  return game.store === 'steam' && /^\d+$/.test(game.storeGameId) ? Number(game.storeGameId) : undefined
+}
+
+/**
+ * Re-reads Steam's review summary for every game with a Steam app, a hundred to a request.
+ * Separate from matching because review scores drift where Metacritic's do not, and
+ * refreshing one needs only the app a match already stored — no search. An app Steam
+ * leaves out of its answer keeps what it had.
+ */
+export async function refreshSteamReviews(
+  platform: Platform,
+  games: OwnedGame[],
+  options: Pick<EnrichOptions, 'signal' | 'onProgress'> = {}
+): Promise<OwnedGame[]> {
+  const ids = [...new Set(games.map(steamAppId).filter((id): id is number => id !== undefined))]
+  const answered = new Map<number, StoreItem>()
+
+  for (let start = 0; start < ids.length; start += STORE_ITEMS_PER_REQUEST) {
+    if (options.signal?.aborted) break
+    if (start > 0) await sleep(1000)
+    const items = await fetchStoreItems(platform, ids.slice(start, start + STORE_ITEMS_PER_REQUEST))
+    for (const [id, item] of items) answered.set(id, item)
+    options.onProgress?.({
+      done: Math.min(start + STORE_ITEMS_PER_REQUEST, ids.length),
+      total: ids.length,
+      title: 'Steam reviews',
+      matched: true
+    })
+  }
+
+  return games.map((game) => {
+    const id = steamAppId(game)
+    return id !== undefined && answered.has(id) ? { ...game, ...reviewsOf(answered.get(id)) } : game
+  })
 }
 
 function releaseYear(raw: string | undefined): number | undefined {
@@ -227,12 +295,12 @@ export async function searchCandidates(
   const result = await json<{ items?: SearchHit[] }>(platform, url)
   const wanted = normalize(title)
   const items = (result?.items ?? []).slice(0, limit)
-  const covers = await fetchCovers(platform, items.map((item) => item.id))
+  const storeItems = await fetchStoreItems(platform, items.map((item) => item.id))
 
   return items.map((item) => ({
     appId: item.id,
     name: item.name,
-    coverUrl: covers.get(item.id),
+    coverUrl: coverOf(storeItems.get(item.id)),
     exact: normalize(item.name) === wanted
   }))
 }
@@ -244,13 +312,14 @@ export async function enrichWithAppId(
   appId: number
 ): Promise<OwnedGame> {
   const details = await fetchDetails(platform, appId)
-  const covers = await fetchCovers(platform, [appId])
+  const item = (await fetchStoreItems(platform, [appId])).get(appId)
   return {
     ...game,
     criticScore: details?.metacritic?.score ?? game.criticScore,
     metacriticUrl: details?.metacritic?.url ?? game.metacriticUrl,
     // No fallback to the stored cover: that is how a dead link would survive a refetch.
-    coverUrl: covers.get(appId),
+    coverUrl: coverOf(item),
+    ...reviewsOf(item),
     genres: details?.genres?.map((g) => g.description) ?? game.genres,
     developer: details?.developers?.[0] ?? game.developer,
     publisher: details?.publishers?.[0] ?? game.publisher,

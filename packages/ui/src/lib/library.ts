@@ -16,6 +16,9 @@ interface GameRow {
   publisher: string | null
   critic_score: number | null
   metacritic_url: string | null
+  steam_review_percent: number | null
+  steam_review_count: number | null
+  steam_review_label: string | null
   store_url: string | null
   user_rating: number | null
   last_played_at: string | null
@@ -48,6 +51,9 @@ function toGame(row: GameRow): OwnedGame {
     publisher: row.publisher ?? undefined,
     criticScore: row.critic_score ?? undefined,
     metacriticUrl: row.metacritic_url ?? undefined,
+    steamReviewPercent: row.steam_review_percent ?? undefined,
+    steamReviewCount: row.steam_review_count ?? undefined,
+    steamReviewLabel: row.steam_review_label ?? undefined,
     storeUrl: row.store_url ?? undefined,
     userRating: row.user_rating ?? undefined,
     lastPlayedAt: row.last_played_at ?? undefined,
@@ -69,10 +75,11 @@ async function insertRow(platform: Platform, game: OwnedGame): Promise<void> {
     `INSERT OR REPLACE INTO game (
        store, store_game_id, title, ownership_kind, owner_account_id, exclude_reason,
        platform, play_status, playtime_minutes, genres, release_year,
-       developer, publisher, critic_score, metacritic_url, store_url,
+       developer, publisher, critic_score, metacritic_url,
+       steam_review_percent, steam_review_count, steam_review_label, store_url,
        user_rating, last_played_at, icon_url, cover_url, notes, enriched_at,
        added_manually
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       game.store,
       game.storeGameId,
@@ -89,6 +96,9 @@ async function insertRow(platform: Platform, game: OwnedGame): Promise<void> {
       game.publisher ?? null,
       game.criticScore ?? null,
       game.metacriticUrl ?? null,
+      game.steamReviewPercent ?? null,
+      game.steamReviewCount ?? null,
+      game.steamReviewLabel ?? null,
       game.storeUrl ?? null,
       game.userRating ?? null,
       game.lastPlayedAt ?? null,

@@ -1,5 +1,5 @@
 // Bump when SCHEMA changes so a shell opening an older file can tell.
-export const SCHEMA_VERSION = 6
+export const SCHEMA_VERSION = 7
 
 // One row per game per store. The same title arriving from two stores stays two rows;
 // merging is a presentation concern, and a wrong merge is worse than a duplicate.
@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS game (
   publisher        TEXT,
   critic_score     INTEGER,
   metacritic_url   TEXT,
+  steam_review_percent INTEGER,
+  steam_review_count   INTEGER,
+  steam_review_label   TEXT,
   store_url        TEXT,
   user_rating      INTEGER,
   last_played_at   TEXT,

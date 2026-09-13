@@ -44,12 +44,19 @@ async function applyPick(appId: number): Promise<void> {
 
       <button
         v-if="library.untried.value.length && !library.running.value"
-        @click="library.enrich(library.games.value, false)"
+        @click="library.enrich(library.games.value, false, true)"
       >
         Fetch missing ({{ library.untried.value.length }})
       </button>
-      <button v-if="!library.running.value" @click="library.enrich(library.games.value, true)">
+      <button v-if="!library.running.value" @click="library.enrich(library.games.value, true, true)">
         Refetch all ({{ library.games.value.length }})
+      </button>
+      <button
+        v-if="!library.running.value && library.games.value.length"
+        title="Refresh every game's Steam review score without searching again"
+        @click="library.updateReviews()"
+      >
+        Update Steam reviews
       </button>
       <button v-if="library.running.value" @click="library.stop()">Stop</button>
     </div>
@@ -71,6 +78,12 @@ async function applyPick(appId: number): Promise<void> {
         A field added after a run leaves earlier rows without it. Those rows already count
         as looked up, so <strong>Refetch all</strong> is what backfills them —
         <em>Fetch missing</em> will skip them.
+      </p>
+      <p class="muted coverage-hint">
+        Steam reviews are the share of players who recommend a game, and run above Metacritic's
+        critic scores, so the two are kept apart rather than one filling in for the other. They
+        also change over time: <strong>Update Steam reviews</strong> refreshes them for the whole
+        library in a few requests.
       </p>
     </div>
 
