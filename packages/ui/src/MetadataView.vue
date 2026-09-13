@@ -13,6 +13,12 @@ const percent = computed(() =>
     : 0
 )
 
+function roughly(seconds: number): string {
+  if (seconds < 60) return 'under a minute'
+  const minutes = Math.round(seconds / 60)
+  return minutes === 1 ? 'about a minute' : `about ${minutes} minutes`
+}
+
 async function applyPick(appId: number): Promise<void> {
   const target = picking.value
   if (!target) return
@@ -59,10 +65,10 @@ async function applyPick(appId: number): Promise<void> {
       </button>
       <button
         v-if="!library.running.value && library.games.value.length"
-        title="Refresh Steam reviews, and look up Metacritic scores Steam lacks, without matching again"
-        @click="library.updateScores()"
+        title="Refresh every game's Steam review score without searching again"
+        @click="library.updateReviews()"
       >
-        Update scores
+        Update Steam reviews
       </button>
       <button
         v-if="library.running.value"
@@ -105,28 +111,69 @@ async function applyPick(appId: number): Promise<void> {
       <p class="muted coverage-hint">
         Steam reviews are the share of players who recommend a game, and run above Metacritic's
         critic scores, so the two are kept apart rather than one filling in for the other. They
-        also change over time: <strong>Update scores</strong> refreshes them for the whole library
-        in a few requests.
+        also change over time: <strong>Update Steam reviews</strong> refreshes them for the whole
+        library in a few requests.
       </p>
-      <p class="muted coverage-hint">
-        Where Steam shows no Metacritic score, one is looked up on
+    </div>
+
+    <section
+      v-if="library.games.value.length"
+      class="panel optional-pass"
+    >
+      <div class="optional-head">
+        <h2 class="section">
+          Fill gaps from PCGamingWiki
+        </h2>
+        <span class="tag">Optional</span>
+      </div>
+      <p class="muted">
+        Not needed for anything else in the library. Steam has no Metacritic score for some games
+        Metacritic has rated, and no Epic or GOG store page for games you own there. This looks each
+        of those games up on
         <a
           href="https://www.pcgamingwiki.com/"
           target="_blank"
           rel="noreferrer"
-        >PCGamingWiki</a>,
-        whose editors record it with its Metacritic page (content under
+        >PCGamingWiki</a>
+        and fills in what its editors have recorded: the Metacritic score with the page it came
+        from, and the store page for the store you own the game on. It only fills empty fields and
+        never replaces anything.
+      </p>
+      <p
+        v-if="library.wikiPass.value.apps"
+        class="optional-estimate"
+      >
+        {{ library.wikiPass.value.apps }} of your games haven't been checked and could gain something.
+        The wiki allows about one request a second, so this would take
+        <strong>{{ roughly(library.wikiPass.value.seconds) }}</strong>. It can be stopped at any
+        point, and keeps what it found.
+      </p>
+      <p
+        v-else
+        class="muted"
+      >
+        Nothing left to look up: every matched game has its score and store page, or has already
+        been checked. A single game can be checked again from its details.
+      </p>
+      <p class="muted optional-credit">
+        Wiki content is under
         <a
           href="https://creativecommons.org/licenses/by-nc-sa/3.0/"
           target="_blank"
           rel="noreferrer"
-        >CC BY-NC-SA</a>).
+        >CC BY-NC-SA</a>.
         <template v-if="library.scoredViaWiki.value">
-          {{ library.scoredViaWiki.value }} of the scores here came from there.
+          {{ library.scoredViaWiki.value }} of the Metacritic scores here came from it.
         </template>
-        The wiki allows a request a second, so filling a large library takes a few minutes.
       </p>
-    </div>
+      <button
+        :disabled="!library.wikiPass.value.apps || library.running.value"
+        @click="library.fillFromWiki()"
+      >
+        Look up {{ library.wikiPass.value.apps }} games on PCGamingWiki
+        ({{ roughly(library.wikiPass.value.seconds) }})
+      </button>
+    </section>
 
     <div
       v-if="picking"

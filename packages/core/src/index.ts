@@ -35,7 +35,8 @@ export {
 } from './enrich/steam.js'
 export { EnrichTransientError, steamAppId, withSteamAppId } from './enrich/shared.js'
 export {
-  fillMetacriticFromPcgamingwiki, metacriticFromWikitext, type MetacriticReception
+  fillFromPcgamingwiki, metacriticFromWikitext, pcgamingwikiGaps, pcgamingwikiSeconds,
+  storePagesFromWikitext, type MetacriticReception, type WikiStorePages
 } from './enrich/pcgamingwiki.js'
 export { toCsv, toJson, type ExportedGame } from './export/csv.js'
 export { fromJson } from './import/json.js'

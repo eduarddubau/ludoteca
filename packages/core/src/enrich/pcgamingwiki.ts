@@ -3,7 +3,8 @@ import type { OwnedGame } from '../connectors/types.js'
 import { fetchJson, sleep, steamAppId } from './shared.js'
 
 /**
- * Metacritic scores Steam does not show, read from PCGamingWiki's Reception rows.
+ * What Steam cannot give, read from PCGamingWiki: Metacritic scores from its Reception rows,
+ * and Epic and GOG store pages from its Availability rows.
  *
  * Not from Metacritic itself: Fandom's terms forbid automated access, and its robots.txt
  * closes /search. PCGamingWiki's editors record each score beside the Metacritic page it
@@ -60,6 +61,42 @@ export function metacriticFromWikitext(text: string): MetacriticReception | null
   return { score: Number(raw), ...(slug ? { url: `https://www.metacritic.com/game/${slug}/` } : {}) }
 }
 
+/** Store pages the wiki lists, for the stores whose pages it can link exactly. */
+export interface WikiStorePages {
+  epic?: string
+  gog?: string
+}
+
+const STORE_ROWS: { store: keyof WikiStorePages; name: RegExp; page: (id: string) => string }[] = [
+  {
+    store: 'epic',
+    name: /^Epic Games Store$/i,
+    page: (id) => `https://store.epicgames.com/p/${id.replace(/^p\//, '')}`
+  },
+  { store: 'gog', name: /^GOG(\.com)?$/i, page: (id) => `https://www.gog.com/en/game/${id}` }
+]
+
+/**
+ * Reads `{{Availability/row| Epic Games Store | <slug> | … }}` rows. A row ending in
+ * `unavailable` is a listing the store has dropped, which would only lead to a dead page.
+ */
+export function storePagesFromWikitext(text: string): WikiStorePages {
+  const pages: WikiStorePages = {}
+  for (const line of text.split('\n')) {
+    const row = line.trim().match(/^\{\{\s*Availability\/row\s*\|([^|]*)\|([^|}]*)/)
+    if (!row || /\|\s*unavailable\s*\}\}\s*$/i.test(line)) continue
+    const id = row[2].trim()
+    const known = STORE_ROWS.find((entry) => entry.name.test(row[1].trim()))
+    if (known && id && !pages[known.store]) pages[known.store] = known.page(id)
+  }
+  return pages
+}
+
+interface WikiPage {
+  metacritic: MetacriticReception | null
+  stores: WikiStorePages
+}
+
 interface RevisionsResponse {
   query?: {
     normalized?: { from: string; to: string }[]
@@ -68,8 +105,8 @@ interface RevisionsResponse {
   }
 }
 
-async function readReception(platform: Platform, titles: string[]): Promise<Map<string, MetacriticReception>> {
-  const found = new Map<string, MetacriticReception>()
+async function readPages(platform: Platform, titles: string[]): Promise<Map<string, WikiPage>> {
+  const found = new Map<string, WikiPage>()
   const result = await request<RevisionsResponse>(platform, {
     action: 'query',
     prop: 'revisions',
@@ -83,18 +120,45 @@ async function readReception(platform: Platform, titles: string[]): Promise<Map<
     [...(result?.query?.normalized ?? []), ...(result?.query?.redirects ?? [])].map((n) => [n.to, n.from])
   )
   for (const page of result?.query?.pages ?? []) {
-    const reception = metacriticFromWikitext(page.revisions?.[0]?.slots?.main?.content ?? '')
-    if (!reception) continue
+    const text = page.revisions?.[0]?.slots?.main?.content ?? ''
+    const parsed = { metacritic: metacriticFromWikitext(text), stores: storePagesFromWikitext(text) }
     let title: string | undefined = page.title
     while (title !== undefined) {
-      found.set(title, reception)
+      found.set(title, parsed)
       title = askedAs.get(title)
     }
   }
   return found
 }
 
+const needsStorePage = (game: OwnedGame): boolean =>
+  (game.store === 'epic' || game.store === 'gog') && !game.storeUrl
+
+/**
+ * Steam apps worth a lookup: a game not yet checked that has no Metacritic score, or is owned on
+ * Epic or GOG without a page. A checked game is skipped, found or not — asking again gets the same
+ * answer — unless `recheck` is set, as the details page does for one game.
+ */
+export function pcgamingwikiGaps(games: OwnedGame[], recheck = false): number[] {
+  return [
+    ...new Set(
+      games
+        .filter((game) => recheck || game.pcgamingwikiCheckedAt === undefined)
+        .filter((game) => game.criticScore === undefined || needsStorePage(game))
+        .map(steamAppId)
+        .filter((id): id is number => id !== undefined)
+    )
+  ]
+}
+
+/** Seconds a fill of this many apps takes at the wiki's pace: one lookup each, one read per fifty. */
+export function pcgamingwikiSeconds(apps: number): number {
+  return Math.ceil(((apps + Math.ceil(apps / PAGES_PER_READ)) * MIN_INTERVAL_MS) / 1000)
+}
+
 export interface FillOptions {
+  /** Look up games already checked too. */
+  recheck?: boolean
   signal?: { aborted: boolean }
   onProgress?: (progress: { done: number; total: number; title: string; matched: boolean }) => void
   /** Called after every fifty apps with the games as filled so far, so a stopped run keeps them. */
@@ -102,37 +166,38 @@ export interface FillOptions {
 }
 
 /**
- * Fills in Metacritic scores for games that have a Steam app but no score. One lookup per
- * app and one read per fifty pages, paced under the wiki's limit: about four minutes for
- * two hundred games. A game the wiki holds no score for is left as it was.
+ * Fills what Steam cannot give from PCGamingWiki: Metacritic scores Steam shows none for, and
+ * the store page of a game owned on Epic or GOG. One lookup per app and one read per fifty
+ * pages, paced under the wiki's limit. Only empty fields are filled; nothing is overwritten.
  */
-export async function fillMetacriticFromPcgamingwiki(
+export async function fillFromPcgamingwiki(
   platform: Platform,
   games: OwnedGame[],
-  { signal, onProgress, onCheckpoint }: FillOptions = {}
+  { recheck = false, signal, onProgress, onCheckpoint }: FillOptions = {}
 ): Promise<OwnedGame[]> {
-  const wanted = [
-    ...new Set(
-      games
-        .filter((game) => game.criticScore === undefined)
-        .map(steamAppId)
-        .filter((id): id is number => id !== undefined)
-    )
-  ]
+  const wanted = pcgamingwikiGaps(games, recheck)
   const titleOf = new Map(games.map((game) => [steamAppId(game), game.title]))
-  const scores = new Map<number, MetacriticReception>()
+  const pages = new Map<number, WikiPage>()
+  const checked = new Map<number, string>()
 
   const apply = (): OwnedGame[] =>
     games.map((game) => {
       const id = steamAppId(game)
-      const reception = id === undefined ? undefined : scores.get(id)
-      if (game.criticScore !== undefined || !reception) return game
-      return {
-        ...game,
-        criticScore: reception.score,
-        metacriticUrl: reception.url ?? game.metacriticUrl,
-        criticScoreSource: 'pcgamingwiki'
+      const checkedAt = id === undefined ? undefined : checked.get(id)
+      if (!checkedAt) return game
+      const page = id === undefined ? undefined : pages.get(id)
+      let next: OwnedGame = { ...game, pcgamingwikiCheckedAt: checkedAt }
+      if (!page) return next
+      if (game.criticScore === undefined && page.metacritic) {
+        next = {
+          ...next,
+          criticScore: page.metacritic.score,
+          metacriticUrl: page.metacritic.url ?? game.metacriticUrl,
+          criticScoreSource: 'pcgamingwiki'
+        }
       }
+      const storePage = needsStorePage(game) ? page.stores[game.store as keyof WikiStorePages] : undefined
+      return storePage ? { ...next, storeUrl: storePage } : next
     })
 
   let done = 0
@@ -148,12 +213,15 @@ export async function fillMetacriticFromPcgamingwiki(
 
     // Read even after a stop, so lookups already paid for are not thrown away.
     if (pageByApp.size) {
-      const reception = await readReception(platform, [...new Set(pageByApp.values())])
-      for (const [id, page] of pageByApp) {
-        const found = reception.get(page)
-        if (found) scores.set(id, found)
+      const read = await readPages(platform, [...new Set(pageByApp.values())])
+      for (const [id, title] of pageByApp) {
+        const found = read.get(title)
+        if (found) pages.set(id, found)
       }
     }
+    // Only once the read has succeeded does an app count as checked.
+    const checkedAt = new Date().toISOString()
+    for (const id of wanted.slice(start, done)) checked.set(id, checkedAt)
     await onCheckpoint?.(apply())
     if (signal?.aborted) break
   }

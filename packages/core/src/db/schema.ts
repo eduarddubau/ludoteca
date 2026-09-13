@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS game (
   steam_review_label   TEXT,
   store_url        TEXT,
   steam_app_id     INTEGER,
+  pcgamingwiki_checked_at TEXT,
   user_rating      INTEGER,
   last_played_at   TEXT,
   icon_url         TEXT,

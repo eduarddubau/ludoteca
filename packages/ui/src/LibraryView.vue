@@ -193,6 +193,15 @@ function onDialogClick(event: MouseEvent): void {
   if (event.target === detailsDialog.value) closeEditor()
 }
 
+// Raw rows, not the override-applied sources: the lookup writes rows back to the table.
+async function lookupOnWiki(recheck: boolean): Promise<void> {
+  const entry = editing.value
+  if (!entry) return
+  const keys = new Set(entry.sources.map((s) => `${s.store}:${s.storeGameId}`))
+  await library.fillFromWiki(library.games.value.filter((g) => keys.has(`${g.store}:${g.storeGameId}`)), recheck)
+  editing.value = source.value.find((candidate) => candidate.key === entry.key) ?? entry
+}
+
 async function hideEditing(): Promise<void> {
   const entry = editing.value
   if (!entry) return
@@ -301,10 +310,12 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
         :fetching="false"
         fetch-error=""
         :hidden="showHidden"
+        :busy="library.running.value"
         @save="saveEdits"
         @refetch="refetchEditing"
         @remove="removeEditing"
         @hide="hideEditing"
+        @lookup-on-wiki="lookupOnWiki"
         @close="closeEditor"
       />
     </dialog>

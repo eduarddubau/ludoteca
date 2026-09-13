@@ -85,6 +85,7 @@ export function fromJson(text: string): ExportedGame[] {
       steamReviewLabel: str(entry['steamReviewLabel']),
       storeUrl: str(entry['storeUrl']),
       steamAppId: num(entry['steamAppId']),
+      pcgamingwikiCheckedAt: str(entry['pcgamingwikiCheckedAt']),
       userRating: num(entry['userRating']),
       lastPlayedAt: str(entry['lastPlayedAt']),
       coverUrl: str(entry['coverUrl']),

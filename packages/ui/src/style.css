@@ -593,6 +593,17 @@ td.col-hours, td.col-releaseYear { text-align: right; }
 }
 .details-actions .grow { flex: 1; }
 .details-confirm { font-size: 13px; color: #e0776b; }
+.details-optional { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); font-size: 13px; color: var(--muted); }
+.details-optional p { margin: 0 0 8px; }
+.details-optional .tag { margin-right: 6px; }
+
+.optional-pass { max-width: 76ch; }
+.optional-head { display: flex; align-items: center; gap: 10px; }
+.optional-head .section { margin: 0; }
+.optional-pass p { margin: 10px 0 0; font-size: 13px; }
+.optional-estimate { color: var(--text); }
+.optional-credit { font-size: 12px; }
+.optional-pass button { margin-top: 12px; }
 
 /* Sized to what goes in them: 99% of titles in a 547-game library fit in 48 characters. */
 .input-title { width: min(48ch, 100%); }

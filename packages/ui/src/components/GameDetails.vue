@@ -20,6 +20,8 @@ const props = defineProps<{
   fetchError: string
   /** Whether the entry is currently hidden, which decides between Hide and Unhide. */
   hidden?: boolean
+  /** A metadata run or wiki lookup is in progress, so another cannot start. */
+  busy?: boolean
 }>()
 const emit = defineEmits<{
   save: [changes: Partial<Record<EditableField, unknown>>]
@@ -29,6 +31,7 @@ const emit = defineEmits<{
   refetch: [changes: Partial<Record<EditableField, unknown>>]
   remove: []
   hide: []
+  lookupOnWiki: [recheck: boolean]
   close: []
 }>()
 
@@ -123,6 +126,30 @@ function cancelEditing(): void {
   title.value = props.entry?.title ?? ''
   platform.value = props.sources[0]?.platform ?? 'pc'
   editing.value = false
+}
+
+/** What the optional PCGamingWiki lookup could still add to this game. */
+const wikiNeeds = computed(() => {
+  if (adding.value || appId.value === undefined || !props.entry) return []
+  const needs: string[] = []
+  if (props.entry.criticScore === undefined) needs.push('a Metacritic score')
+  for (const source of props.entry.sources) {
+    if ((source.store === 'epic' || source.store === 'gog') && !source.storeUrl) {
+      needs.push(`the ${sourceLabel(source)} store page`)
+    }
+  }
+  return needs
+})
+const listed = (items: string[]): string =>
+  items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : (items[0] ?? '')
+
+// Checked games are no longer offered by the bulk pass, so the page says what the wiki lacked.
+const wikiChecked = computed(() => props.sources.some((game) => game.pcgamingwikiCheckedAt !== undefined))
+const lookingUp = ref(false)
+
+function lookupOnWiki(recheck: boolean): void {
+  lookingUp.value = true
+  emit('lookupOnWiki', recheck)
 }
 
 const confirmingDelete = ref(false)
@@ -453,6 +480,26 @@ function submit(): void {
           </dd>
         </template>
       </dl>
+      <div
+        v-if="wikiNeeds.length"
+        class="details-optional"
+      >
+        <p v-if="wikiChecked">
+          PCGamingWiki had no record of {{ listed(wikiNeeds) }} when it was checked.
+        </p>
+        <p v-else>
+          <span class="tag">Optional</span>
+          Steam doesn't provide {{ listed(wikiNeeds) }}. PCGamingWiki may list
+          {{ wikiNeeds.length > 1 ? 'them' : 'it' }}; looking it up takes a few seconds.
+        </p>
+        <button
+          type="button"
+          :disabled="busy"
+          @click="lookupOnWiki(wikiChecked)"
+        >
+          {{ busy && lookingUp ? 'Looking up…' : wikiChecked ? 'Check again' : 'Look up on PCGamingWiki' }}
+        </button>
+      </div>
     </section>
 
     <footer class="details-actions">

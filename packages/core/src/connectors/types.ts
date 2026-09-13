@@ -66,6 +66,8 @@ export interface OwnedGame {
   /** The Steam app enrichment matched, whichever store the game is owned on — what review
    *  scores, PCGamingWiki and the Steam page link key on. */
   steamAppId?: number
+  /** When PCGamingWiki was last asked about this game's app, found or not. */
+  pcgamingwikiCheckedAt?: string
   userRating?: number
   lastPlayedAt?: string
   iconUrl?: string

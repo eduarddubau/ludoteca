@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import {
-  applyUserData, createConnector, enrichLibrary, enrichWithAppId, fillMetacriticFromPcgamingwiki,
-  gameKey, refreshSteamReviews,
+  applyUserData, createConnector, enrichLibrary, enrichWithAppId, fillFromPcgamingwiki,
+  gameKey, pcgamingwikiGaps, pcgamingwikiSeconds, refreshSteamReviews,
   steamAppId,
   type ExportedGame,
   mergeLibrary,
@@ -52,6 +52,11 @@ export function useLibrary() {
   const scoredViaWiki = computed(
     () => games.value.filter((g) => g.criticScoreSource === 'pcgamingwiki').length
   )
+  /** What the optional PCGamingWiki pass would look up, and roughly how long it would take. */
+  const wikiPass = computed(() => {
+    const apps = pcgamingwikiGaps(games.value).length
+    return { apps, seconds: pcgamingwikiSeconds(apps) }
+  })
 
   // Per-field, because a field added to enrichment after a run leaves every existing row
   // without it — and since those rows are already marked attempted, "fetch missing"
@@ -293,7 +298,6 @@ export function useLibrary() {
     try {
       let next = await enrichLibrary(platform, target, {
         force,
-        fillFromPcgamingwiki: true,
         signal: abort.value,
         onProgress: (p) => (progress.value = p),
         onCheckpoint: async (partial) => {
@@ -317,11 +321,8 @@ export function useLibrary() {
     }
   }
 
-  /**
-   * Scores only, for rows already matched: Steam reviews for every game, then Metacritic
-   * from PCGamingWiki for games Steam did not score. No searching, so nothing is rematched.
-   */
-  async function updateScores(): Promise<void> {
+  /** Steam review scores for every matched game, in a few batched requests and without searching. */
+  async function updateReviews(): Promise<void> {
     if (running.value) return
     const platform = usePlatform()
     abort.value = { aborted: false }
@@ -329,23 +330,42 @@ export function useLibrary() {
     const apps = new Set(games.value.map(steamAppId).filter((id) => id !== undefined))
     progress.value = { done: 0, total: apps.size, title: 'Steam reviews', matched: true }
     try {
-      let next = await refreshSteamReviews(platform, games.value, {
+      const next = await refreshSteamReviews(platform, games.value, {
         signal: abort.value,
         onProgress: (p) => (progress.value = p)
       })
       await replaceAll(merge(next))
-      if (!abort.value.aborted) {
-        next = await fillMetacriticFromPcgamingwiki(platform, games.value, {
-          signal: abort.value,
-          onProgress: (p) => (progress.value = p),
-          onCheckpoint: async (partial) => {
-            const merged = merge(partial)
-            await replaceGames(platform, merged)
-            games.value = merged
-          }
-        })
-        await replaceAll(merge(next))
-      }
+    } catch (err) {
+      enrichError.value = err instanceof Error ? err.message : String(err)
+      await reload()
+    } finally {
+      progress.value = null
+    }
+  }
+
+  /**
+   * The optional PCGamingWiki pass: Metacritic scores Steam shows none for, and Epic and GOG
+   * store pages. Kept out of every automatic run, since the wiki's limit of a request a second
+   * makes it the slow part.
+   */
+  async function fillFromWiki(targets: OwnedGame[] = games.value, recheck = false): Promise<void> {
+    if (running.value) return
+    const platform = usePlatform()
+    abort.value = { aborted: false }
+    enrichError.value = ''
+    progress.value = { done: 0, total: pcgamingwikiGaps(targets, recheck).length, title: 'PCGamingWiki', matched: false }
+    try {
+      const next = await fillFromPcgamingwiki(platform, targets, {
+        recheck,
+        signal: abort.value,
+        onProgress: (p) => (progress.value = p),
+        onCheckpoint: async (partial) => {
+          const merged = merge(partial)
+          await replaceGames(platform, merged)
+          games.value = merged
+        }
+      })
+      await replaceAll(merge(next))
     } catch (err) {
       enrichError.value = err instanceof Error ? err.message : String(err)
       await reload()
@@ -363,10 +383,7 @@ export function useLibrary() {
     if (running.value) throw new Error('A metadata run is in progress. Stop it first.')
     previewing.value = true
     try {
-      const [enriched] = await enrichLibrary(usePlatform(), [draft], {
-        force: true,
-        fillFromPcgamingwiki: true
-      })
+      const [enriched] = await enrichLibrary(usePlatform(), [draft], { force: true })
       return enriched ?? draft
     } finally {
       previewing.value = false
@@ -374,21 +391,18 @@ export function useLibrary() {
   }
 
   async function applyMatch(game: OwnedGame, appId: number): Promise<void> {
-    const platform = usePlatform()
-    const [updated] = await fillMetacriticFromPcgamingwiki(platform, [
-      await enrichWithAppId(platform, game, appId)
-    ])
+    const updated = await enrichWithAppId(usePlatform(), game, appId)
     await replaceAll(merge([updated]))
   }
 
   return {
     games, applied, entries, hiddenEntries, editedKeys, customised,
-    untried, unresolved, resolved, coverage, scoredViaWiki,
+    untried, unresolved, resolved, coverage, scoredViaWiki, wikiPass,
     importGames, entrySources, userDataFor: userEntryFor, setHidden, setOverrides,
     addManual, removeGame,
     connections, connecting, connect, sync, disconnect,
     progress, enrichError, running,
     stop: () => (abort.value.aborted = true),
-    reload, replaceAll, enrich, updateScores, applyMatch, previewMetadata, wipe
+    reload, replaceAll, enrich, updateReviews, fillFromWiki, applyMatch, previewMetadata, wipe
   }
 }

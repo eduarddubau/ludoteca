@@ -63,17 +63,20 @@ score by hand, because a hand-typed score isn't one.
 recommend a game — sits beside the Metacritic chip as its own outlined chip, column and sort,
 never in the Metacritic slot. The two measure different things: across one 279-game library
 Steam ran a median 7 points higher, and Goat Simulator is 62 on Metacritic but 90% on Steam.
-Review scores drift, so **Update scores** refreshes the whole library in a few batched requests
-without searching again.
+Review scores drift, so **Update Steam reviews** refreshes the whole library in a few batched
+requests without searching again.
 
-**Metacritic scores Steam doesn't show come from PCGamingWiki.** Steam carries no score for
-many games Metacritic has rated — 186 of 465 matched games in one library. Metacritic itself
-can't be read automatically: Fandom's terms forbid it and its robots.txt closes search. So for
-those games Ludoteca looks up the [PCGamingWiki](https://www.pcgamingwiki.com/) page by Steam
-app id and reads the Metacritic score its editors recorded, with the Metacritic page it came
-from; on that library it found 86 more, and agreed with Steam on 70 of the 73 it could check.
-The chip notes the source, the wiki's CC BY-NC-SA content is credited on the Metadata tab, and
-requests are paced under its limit of one a second.
+**PCGamingWiki fills the gaps, if you ask it to.** Steam carries no Metacritic score for many
+games Metacritic has rated — 186 of 465 matched games in one library — and no Epic or GOG store
+page for games owned there. Metacritic itself can't be read automatically: Fandom's terms forbid
+it and its robots.txt closes search. An optional pass on the Metadata tab looks those games up on
+[PCGamingWiki](https://www.pcgamingwiki.com/) by Steam app id and fills in what its editors
+recorded: the Metacritic score with the page it came from (86 more on that library, agreeing with
+Steam on 70 of the 73 it could check), and the store page from its availability list. It is kept
+out of every automatic run because the wiki allows one request a second, so the tab shows how long
+it would take for your library before you start it; a single game can also be looked up from its
+details page. The chip notes where a score came from, and the wiki's CC BY-NC-SA content is
+credited.
 
 <p align="center">
   <img src="docs/add-game.png" width="820"
@@ -203,8 +206,8 @@ shell:
 Two views over the same data. The **grid** is cover art, the two score chips, store tags and
 playtime; clicking or tapping a cover opens that game's details as a dialog, where its title and
 platform can be edited in place, and which stays on screen however far the grid is scrolled.
-The **list** carries every field there is, all sortable, with missing values sinking to the bottom in both
-directions rather than sorting among the As.
+The **list** carries every field there is, all sortable, with missing values sinking to the
+bottom in both directions rather than sorting among the As.
 
 <p align="center">
   <img src="docs/library-list.png" width="900"

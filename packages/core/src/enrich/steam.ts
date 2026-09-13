@@ -1,6 +1,5 @@
 import type { Platform } from '../platform.js'
 import type { OwnedGame } from '../connectors/types.js'
-import { fillMetacriticFromPcgamingwiki } from './pcgamingwiki.js'
 import { fetchJson, sleep, steamAppId } from './shared.js'
 
 export interface EnrichProgress {
@@ -24,8 +23,6 @@ export interface EnrichOptions {
    */
   onCheckpoint?: (games: OwnedGame[]) => Promise<void> | void
   checkpointEvery?: number
-  /** After matching, fill scores Steam did not show from PCGamingWiki, batched and paced. */
-  fillFromPcgamingwiki?: boolean
 }
 
 interface SearchHit {
@@ -276,6 +273,8 @@ export async function enrichWithAppId(
     publisher: details?.publishers?.[0] ?? game.publisher,
     releaseYear: releaseYear(details?.release_date?.date) ?? game.releaseYear,
     steamAppId: appId,
+    // What the wiki holds depends on the app, so a different match needs checking again.
+    pcgamingwikiCheckedAt: appId === game.steamAppId ? game.pcgamingwikiCheckedAt : undefined,
     // Steam's page is the store page only for a Steam game; an imported one, with no app of its
     // own, takes the match. Any other store's page, like a synced GOG one, is left alone.
     storeUrl:
@@ -308,10 +307,7 @@ export async function enrichLibrary(
   games: OwnedGame[],
   options: EnrichOptions = {}
 ): Promise<OwnedGame[]> {
-  const {
-    delayMs = 350, onProgress, signal, force = false, onCheckpoint, checkpointEvery = 25,
-    fillFromPcgamingwiki = false
-  } = options
+  const { delayMs = 350, onProgress, signal, force = false, onCheckpoint, checkpointEvery = 25 } = options
   const pending = games.filter((game) => force || needsEnrichment(game))
   const results = new Map<string, OwnedGame>()
 
@@ -341,23 +337,6 @@ export async function enrichLibrary(
 
     if (onCheckpoint && (index + 1) % checkpointEvery === 0) await onCheckpoint(merged())
     await sleep(delayMs)
-  }
-
-  // Batched after the loop rather than per game: fifty wiki pages cost one read.
-  if (fillFromPcgamingwiki && !signal?.aborted && results.size) {
-    const keep = (filled: OwnedGame[]): void => {
-      for (const game of filled) results.set(`${game.store}:${game.storeGameId}`, game)
-    }
-    keep(
-      await fillMetacriticFromPcgamingwiki(platform, [...results.values()], {
-        signal,
-        onProgress,
-        onCheckpoint: async (filled) => {
-          keep(filled)
-          await onCheckpoint?.(merged())
-        }
-      })
-    )
   }
 
   return merged()
