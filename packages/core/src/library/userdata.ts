@@ -114,6 +114,7 @@ export function preserveEnrichment(fetched: OwnedGame[], existing: OwnedGame[]):
       metacriticUrl: previous.metacriticUrl,
       criticScoreSource: previous.criticScoreSource,
       steamAppId: previous.steamAppId,
+      steamAppPinned: previous.steamAppPinned,
       pcgamingwikiCheckedAt: previous.pcgamingwikiCheckedAt,
       steamReviewPercent: previous.steamReviewPercent,
       steamReviewCount: previous.steamReviewCount,

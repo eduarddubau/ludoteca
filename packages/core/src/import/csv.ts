@@ -183,6 +183,7 @@ function readEnrichment(row: Record<string, string>): Partial<OwnedGame> {
     steamReviewLabel: text(row['steam_review_label']),
     storeUrl: text(row['store_url']),
     steamAppId: number(row['steam_app_id']),
+    steamAppPinned: boolean(row['steam_app_pinned']),
     pcgamingwikiCheckedAt: text(row['pcgamingwiki_checked_at']),
     coverUrl: text(row['cover_url']),
     iconUrl: text(row['icon_url']),

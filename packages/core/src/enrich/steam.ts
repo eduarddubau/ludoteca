@@ -10,8 +10,8 @@ export interface EnrichProgress {
 }
 
 export interface EnrichOptions {
-  /** Steam rate-limits; this paces requests rather than getting throttled mid-run. */
-  delayMs?: number
+  /** Least time between Steam requests; the default holds a run under Steam's limit. */
+  requestIntervalMs?: number
   onProgress?: (progress: EnrichProgress) => void
   signal?: { aborted: boolean }
   /** Re-attempt games that have already been tried. */
@@ -43,9 +43,24 @@ export interface MatchCandidate {
 const normalize = (s: string): string =>
   s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
-// Every request goes through the shared helper, so a failure is never recorded as a miss.
-const json = <T>(platform: Platform, url: string): Promise<T | null> =>
-  fetchJson<T>(platform, url, { source: 'Steam' })
+/**
+ * Steam throttles its store endpoints per address. appdetails takes one app per request, so a
+ * full run is bounded by it: 52 games a minute ran 506 games cleanly, 64 a minute was refused
+ * with 429s after 273. Requests are spaced so a matched game (search, then details) stays at
+ * the safe pace, and a 429 waits out the window rather than failing the run.
+ */
+const STEAM_INTERVAL_MS = 600
+const STEAM_RETRY_DELAYS_MS = [5_000, 30_000, 90_000]
+const pacing = new WeakMap<Platform, { lastAt: number; intervalMs: number }>()
+
+async function json<T>(platform: Platform, url: string): Promise<T | null> {
+  const pace = pacing.get(platform) ?? { lastAt: 0, intervalMs: STEAM_INTERVAL_MS }
+  const wait = pace.lastAt + pace.intervalMs - Date.now()
+  if (wait > 0) await sleep(wait)
+  pacing.set(platform, { ...pace, lastAt: Date.now() })
+  // Every request goes through the shared helper, so a failure is never recorded as a miss.
+  return fetchJson<T>(platform, url, { source: 'Steam', retryDelaysMs: STEAM_RETRY_DELAYS_MS })
+}
 
 // Editions Steam ships under a longer name than the game is commonly called. Anchored at
 // both ends, so the whole remainder has to be edition words: anchored only at the end, it
@@ -201,7 +216,6 @@ export async function refreshSteamReviews(
 
   for (let start = 0; start < ids.length; start += STORE_ITEMS_PER_REQUEST) {
     if (options.signal?.aborted) break
-    if (start > 0) await sleep(1000)
     const items = await fetchStoreItems(platform, ids.slice(start, start + STORE_ITEMS_PER_REQUEST))
     for (const [id, item] of items) answered.set(id, item)
     options.onProgress?.({
@@ -252,14 +266,10 @@ export async function searchCandidates(
   }))
 }
 
-/** Applies a specific Steam app to a game — the manual counterpart to enrichGame. */
-export async function enrichWithAppId(
-  platform: Platform,
-  game: OwnedGame,
-  appId: number
-): Promise<OwnedGame> {
-  const details = await fetchDetails(platform, appId)
-  const item = (await fetchStoreItems(platform, [appId])).get(appId)
+type Details = AppDetails['data'] | null
+
+/** A match applied to a game: Steam's store details, plus the art and reviews of its store item. */
+function applyMatch(game: OwnedGame, appId: number, details: Details, item: StoreItem | undefined): OwnedGame {
   return {
     ...game,
     criticScore: details?.metacritic?.score ?? game.criticScore,
@@ -286,57 +296,136 @@ export async function enrichWithAppId(
 }
 
 /**
- * Enriches one game from Steam's public store endpoints — no API key. Call this
- * directly when a single game is added; `enrichLibrary` is the batch built on it.
- *
- * Runs for every store, not only Steam: Steam's database carries most Epic and GOG
- * titles, and a Metacritic score is the same score wherever the game was bought. Only
- * `storeUrl` stays store-specific.
+ * Marked attempted even with no match, so it is not retried on every run and the manual
+ * picker lists exactly what automation could not resolve. A refetch that no longer finds
+ * the app it matched before drops everything that match brought, rather than keep showing
+ * another game's cover and scores.
  */
-export async function enrichGame(platform: Platform, game: OwnedGame): Promise<OwnedGame> {
-  const hit = await findAppId(platform, game.title)
-  // Marked attempted even with no match, so it is not re-tried on every run — and so the
-  // manual picker can list exactly the games automation could not resolve.
-  if (!hit) return { ...game, enrichedAt: new Date().toISOString() }
-  return enrichWithAppId(platform, game, hit.id)
+function noMatch(game: OwnedGame): OwnedGame {
+  const enrichedAt = new Date().toISOString()
+  if (game.steamAppId === undefined) return { ...game, enrichedAt }
+  return {
+    ...game,
+    steamAppId: undefined,
+    pcgamingwikiCheckedAt: undefined,
+    coverUrl: undefined,
+    criticScore: undefined,
+    metacriticUrl: undefined,
+    criticScoreSource: undefined,
+    steamReviewPercent: undefined,
+    steamReviewCount: undefined,
+    steamReviewLabel: undefined,
+    genres: [],
+    developer: undefined,
+    publisher: undefined,
+    releaseYear: undefined,
+    storeUrl: game.store === 'steam' && !/^\d+$/.test(game.storeGameId) ? undefined : game.storeUrl,
+    enrichedAt
+  }
 }
 
-/** Enriches every game that has not been attempted yet, paced and interruptible. */
+/**
+ * The app a game already has without searching: one a person chose, or a synced Steam game's
+ * own. Searching by title for those could only find a worse match.
+ */
+function knownAppId(game: OwnedGame): number | undefined {
+  if (game.steamAppPinned && game.steamAppId !== undefined) return game.steamAppId
+  return game.store === 'steam' && /^\d+$/.test(game.storeGameId) ? Number(game.storeGameId) : undefined
+}
+
+/** Applies a specific Steam app to a game — the manual counterpart to enrichGame. */
+export async function enrichWithAppId(
+  platform: Platform,
+  game: OwnedGame,
+  appId: number
+): Promise<OwnedGame> {
+  const details = await fetchDetails(platform, appId)
+  const item = (await fetchStoreItems(platform, [appId])).get(appId)
+  return applyMatch(game, appId, details, item)
+}
+
+/**
+ * Enriches one game from Steam's public store endpoints — no API key.
+ *
+ * Runs for every store, not only Steam: Steam's database carries most Epic and GOG
+ * titles, and a Metacritic score is the same score wherever the game was bought.
+ */
+export async function enrichGame(platform: Platform, game: OwnedGame): Promise<OwnedGame> {
+  const [enriched] = await enrichLibrary(platform, [game], { force: true })
+  return enriched ?? game
+}
+
+/**
+ * Enriches every game that has not been attempted yet, paced and interruptible.
+ *
+ * Search and store details are one game at a time, since appdetails takes a single app per
+ * request. Art and review scores are not: each chunk's matches share one store-item request,
+ * which removed about a third of a full run's requests. A match someone chose by hand is
+ * reused instead of searched for again.
+ */
 export async function enrichLibrary(
   platform: Platform,
   games: OwnedGame[],
   options: EnrichOptions = {}
 ): Promise<OwnedGame[]> {
-  const { delayMs = 350, onProgress, signal, force = false, onCheckpoint, checkpointEvery = 25 } = options
+  const {
+    requestIntervalMs = STEAM_INTERVAL_MS, onProgress, signal, force = false, onCheckpoint,
+    checkpointEvery = 25
+  } = options
+  const previousPace = pacing.get(platform)
+  pacing.set(platform, { lastAt: previousPace?.lastAt ?? 0, intervalMs: requestIntervalMs })
+  try {
+    return await matchInChunks(platform, games, { onProgress, signal, force, onCheckpoint, checkpointEvery })
+  } finally {
+    // Scoped to this run, so a custom interval does not leak into later requests on the platform.
+    pacing.set(platform, { lastAt: pacing.get(platform)?.lastAt ?? 0, intervalMs: previousPace?.intervalMs ?? STEAM_INTERVAL_MS })
+  }
+}
+
+async function matchInChunks(
+  platform: Platform,
+  games: OwnedGame[],
+  { onProgress, signal, force, onCheckpoint, checkpointEvery }: Required<Pick<EnrichOptions, 'force' | 'checkpointEvery'>> &
+    Pick<EnrichOptions, 'onProgress' | 'signal' | 'onCheckpoint'>
+): Promise<OwnedGame[]> {
   const pending = games.filter((game) => force || needsEnrichment(game))
   const results = new Map<string, OwnedGame>()
+  const keyOf = (game: OwnedGame): string => `${game.store}:${game.storeGameId}`
+  const merged = (): OwnedGame[] => games.map((game) => results.get(keyOf(game)) ?? game)
 
-  const merged = (): OwnedGame[] =>
-    games.map((game) => results.get(`${game.store}:${game.storeGameId}`) ?? game)
+  let done = 0
+  for (let start = 0; start < pending.length && !signal?.aborted; start += checkpointEvery) {
+    const matches: { game: OwnedGame; appId: number; details: Details }[] = []
+    let failure: unknown
 
-  for (const [index, game] of pending.entries()) {
-    if (signal?.aborted) break
-
-    let enriched: OwnedGame
-    try {
-      enriched = await enrichGame(platform, game)
-    } catch (err) {
-      // Save what this run achieved before surfacing the failure, or everything since
-      // the last checkpoint is lost and has no enrichedAt to resume from.
-      await onCheckpoint?.(merged())
-      throw err
+    for (const game of pending.slice(start, start + checkpointEvery)) {
+      if (signal?.aborted) break
+      try {
+        const appId = knownAppId(game) ?? (await findAppId(platform, game.title))?.id
+        if (appId === undefined) results.set(keyOf(game), noMatch(game))
+        else matches.push({ game, appId, details: await fetchDetails(platform, appId) })
+        done++
+        onProgress?.({ done, total: pending.length, title: game.title, matched: appId !== undefined })
+      } catch (err) {
+        failure = err
+        break
+      }
     }
 
-    results.set(`${game.store}:${game.storeGameId}`, enriched)
-    onProgress?.({
-      done: index + 1,
-      total: pending.length,
-      title: game.title,
-      matched: enriched.criticScore !== undefined || enriched.coverUrl !== undefined
-    })
+    try {
+      const items = await fetchStoreItems(platform, matches.map((match) => match.appId))
+      for (const { game, appId, details } of matches) {
+        results.set(keyOf(game), applyMatch(game, appId, details, items.get(appId)))
+      }
+    } catch (err) {
+      // Those matches stay unattempted rather than stamped without their art, so a rerun retries them.
+      failure ??= err
+    }
 
-    if (onCheckpoint && (index + 1) % checkpointEvery === 0) await onCheckpoint(merged())
-    await sleep(delayMs)
+    // Saved before a failure surfaces, or everything since the last checkpoint is lost and
+    // has no enrichedAt to resume from.
+    await onCheckpoint?.(merged())
+    if (failure !== undefined) throw failure
   }
 
   return merged()

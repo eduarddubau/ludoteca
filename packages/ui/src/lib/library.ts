@@ -22,6 +22,7 @@ interface GameRow {
   steam_review_label: string | null
   store_url: string | null
   steam_app_id: number | null
+  steam_app_pinned: number
   pcgamingwiki_checked_at: string | null
   user_rating: number | null
   last_played_at: string | null
@@ -63,6 +64,7 @@ function toGame(row: GameRow): OwnedGame {
     steamReviewLabel: row.steam_review_label ?? undefined,
     storeUrl: row.store_url ?? undefined,
     steamAppId: row.steam_app_id ?? undefined,
+    steamAppPinned: row.steam_app_pinned === 1,
     pcgamingwikiCheckedAt: row.pcgamingwiki_checked_at ?? undefined,
     userRating: row.user_rating ?? undefined,
     lastPlayedAt: row.last_played_at ?? undefined,
@@ -86,10 +88,10 @@ async function insertRow(platform: Platform, game: OwnedGame): Promise<void> {
        platform, play_status, playtime_minutes, genres, release_year,
        developer, publisher, critic_score, metacritic_url, critic_score_source,
        steam_review_percent, steam_review_count, steam_review_label, store_url, steam_app_id,
-       pcgamingwiki_checked_at,
+       steam_app_pinned, pcgamingwiki_checked_at,
        user_rating, last_played_at, icon_url, cover_url, notes, enriched_at,
        added_manually
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       game.store,
       game.storeGameId,
@@ -112,6 +114,7 @@ async function insertRow(platform: Platform, game: OwnedGame): Promise<void> {
       game.steamReviewLabel ?? null,
       game.storeUrl ?? null,
       game.steamAppId ?? null,
+      game.steamAppPinned ? 1 : 0,
       game.pcgamingwikiCheckedAt ?? null,
       game.userRating ?? null,
       game.lastPlayedAt ?? null,

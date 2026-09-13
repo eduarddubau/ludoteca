@@ -391,8 +391,9 @@ export function useLibrary() {
   }
 
   async function applyMatch(game: OwnedGame, appId: number): Promise<void> {
+    // Pinned: a person chose this app, so a later refetch reuses it instead of searching.
     const updated = await enrichWithAppId(usePlatform(), game, appId)
-    await replaceAll(merge([updated]))
+    await replaceAll(merge([{ ...updated, steamAppPinned: true }]))
   }
 
   return {

@@ -223,7 +223,7 @@ async function refetchEditing(changes: Partial<Record<EditableField, unknown>>):
     await library.setOverrides(editingSources.value, changes)
   }
   closeEditor()
-  await enrichOne(entry, searchTitle)
+  await enrichOne(entry, searchTitle, changes.title !== undefined)
 }
 
 async function removeEditing(): Promise<void> {
@@ -234,11 +234,12 @@ async function removeEditing(): Promise<void> {
 /** Per-entry fetch: enriches every store row behind it. */
 // searchTitle is passed explicitly after a rename: `entry` is captured before the
 // override lands, so reading entry.title here would look the old name up again.
-async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promise<void> {
+// A corrected title means the chosen match was wrong too, so it is searched for again.
+async function enrichOne(entry: LibraryEntry, searchTitle = entry.title, rematch = false): Promise<void> {
   const keys = new Set(entry.sources.map((s) => `${s.store}:${s.storeGameId}`))
   const targets = library.games.value
     .filter((g) => keys.has(`${g.store}:${g.storeGameId}`))
-    .map((game) => ({ ...game, title: searchTitle }))
+    .map((game) => ({ ...game, title: searchTitle, ...(rematch ? { steamAppPinned: false } : {}) }))
   await library.enrich(targets, true)
 }
 </script>
