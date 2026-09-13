@@ -130,9 +130,11 @@ by the next import. Only games added by hand, which have no upstream, are truly 
 
 ## Quick start
 
-Needs **Node.js 26+** and **npm 12+**; `npm install` refuses older versions.
+Needs **Node.js 26+** and **npm 12+**, which `npm install` enforces. Node 26 still ships npm 11,
+so upgrade npm first:
 
 ```bash
+npm install --global npm@12
 git clone https://github.com/eduarddubau/ludoteca.git && cd ludoteca
 npm install
 npm run dev          # builds core, then runs it with Vite and Electron
@@ -166,7 +168,9 @@ Everything is local, and there is no server to talk to.
   ownership, hidden flags and your per-field edits, and playtime in minutes so nothing rounds on
   the way back. Importing it restores the library as it was.
 - **Import keeps what's yours.** Your edits and hidden flags live in their own table, layered
-  over imported rows, so an import never erases them, and games you added by hand survive it.
+  over imported rows. Importing a file that doesn't record them — a hand-built list, another
+  tool's export — leaves them alone, and games you added by hand survive it. Restoring a
+  Ludoteca backup sets them back to what the backup recorded.
 - **Deleting is scoped and deliberate.** Clear the library, clear it with sync history, or reset
   to first run including store sign-ins. Each lists what it will delete and waits for you to type
   the count it shows.
@@ -257,7 +261,7 @@ An npm-workspaces monorepo shaped to keep one UI running in more than one shell:
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Builds core, then runs core in watch mode, the Vite dev server and the Electron shell together |
+| `npm run dev` | Builds core, then runs its watcher beside the Vite dev server and Electron. Core and UI changes reach the window live; the Electron main process picks them up on restart |
 | `npm run build` | Builds core and the UI |
 | `npm run typecheck` | Type-checks every workspace, templates included |
 | `npm run lint` | ESLint, including the shell boundary and a type-aware ban on deprecated APIs |
@@ -265,11 +269,12 @@ An npm-workspaces monorepo shaped to keep one UI running in more than one shell:
 **CI** runs on every push to `master` and every pull request: a clean install, build, Electron
 bundle, typecheck and lint. There is no automated test suite yet.
 
-**Dependencies stay current.** Everything is on its latest stable release, and nothing deprecated
-is allowed: the linter fails on deprecated APIs, and deprecated packages pulled in by other
-packages are replaced through npm `overrides`. Dependabot proposes updates weekly, after a seven-day
-cooldown. Every dependency install script is reviewed in `package.json`; none is needed, and npm 12
-runs none that isn't approved.
+**Dependencies stay current.** Every dependency is on its latest stable release unless a verified
+incompatibility holds it back — today only TypeScript 7, which typescript-eslint doesn't support
+yet. Nothing deprecated is allowed: the linter fails on deprecated APIs, and deprecated packages
+pulled in by other packages are replaced through npm `overrides`. Dependabot proposes updates
+weekly. The two dependencies that declare install scripts don't need them, so `package.json`
+denies both, and npm 12 runs no install script it hasn't been told to allow.
 
 ## Building a release
 
