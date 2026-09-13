@@ -7,7 +7,7 @@ export const KNOWN_STORES: StoreId[] = STORE_IDS
 
 const PLATFORM_ALIASES: [GamePlatform, string[]][] = [
   ['playstation', ['playstation', 'psn', 'ps5', 'ps4', 'ps3', 'ps2']],
-  ['switch', ['nintendoswitch', 'nintendo', 'switch']],
+  ['switch', ['nintendoswitch', 'switch']],
   ['xbox', ['xboxseries', 'xboxone', 'xbox360', 'xbox', 'gamepass']],
   ['pc', ['steamdeck', 'windows', 'linux', 'macos', 'desktop', 'mac', 'pc']]
 ]
@@ -29,9 +29,17 @@ export function toStore(raw: string | undefined): StoreId {
   return KNOWN_STORES.find((s) => value.includes(s)) ?? 'other'
 }
 
+const NOT_STARTED = ['unplayed', 'notplayed', 'never', 'notstarted', 'unstarted', 'backlog']
+// Not finished says nothing about whether it was started.
+const NOT_FINISHED = ['incomplete', 'unfinished', 'notfinished', 'notcompleted', 'uncompleted']
+const STARTED = ['played', 'playing', 'complete', 'finish', 'beaten']
+
+/** Negations are checked first: "notplayed" and "incomplete" contain the words for played. */
 export function toStatus(raw: string | undefined): PlayStatus {
   const value = normalize(raw ?? '')
-  if (value.includes('unplayed') || value.includes('never')) return 'unplayed'
-  if (value.includes('played') || value.includes('complete') || value.includes('finish')) return 'played'
+  const has = (words: string[]): boolean => words.some((w) => value.includes(w))
+  if (has(NOT_STARTED)) return 'unplayed'
+  if (has(NOT_FINISHED)) return 'unknown'
+  if (has(STARTED)) return 'played'
   return 'unknown'
 }

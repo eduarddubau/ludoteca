@@ -105,13 +105,14 @@ function toOwnership(row: Record<string, string>): Ownership {
   }
 }
 
-// Column headers disagree on units. Anything not explicitly minutes is read as hours,
-// which is what hand-kept lists and most exports use.
+// Column headers disagree on units. Anything not explicitly minutes is read as hours, which
+// is what hand-kept lists use; Steam's own `playtime_forever` is minutes without saying so.
 function toMinutes(raw: string | undefined, header: string): number | undefined {
   if (!raw?.trim()) return undefined
   const value = Number.parseFloat(raw.replace(/[^0-9.]/g, ''))
   if (Number.isNaN(value)) return undefined
-  return normalize(header).includes('minute') ? Math.round(value) : Math.round(value * 60)
+  const minutes = normalize(header).includes('minute') || normalize(header) === 'playtimeforever'
+  return minutes ? Math.round(value) : Math.round(value * 60)
 }
 
 const number = (raw: string | undefined): number | undefined => {
@@ -129,16 +130,38 @@ const text = (raw: string | undefined): string | undefined => {
   return value ? value : undefined
 }
 
+const DESCRIPTIVE_ALIASES = {
+  genres: ['genres', 'genre'],
+  releaseYear: ['releaseyear', 'year'],
+  developer: ['developer', 'developers'],
+  publisher: ['publisher', 'publishers'],
+  notes: ['notes', 'note']
+}
+
+type DescriptiveColumns = Record<keyof typeof DESCRIPTIVE_ALIASES, string | undefined>
+
+function descriptiveColumns(headers: string[]): DescriptiveColumns {
+  const find = (aliases: string[]): string | undefined => headers.find((h) => aliases.includes(normalize(h)))
+  return {
+    genres: find(DESCRIPTIVE_ALIASES.genres),
+    releaseYear: find(DESCRIPTIVE_ALIASES.releaseYear),
+    developer: find(DESCRIPTIVE_ALIASES.developer),
+    publisher: find(DESCRIPTIVE_ALIASES.publisher),
+    notes: find(DESCRIPTIVE_ALIASES.notes)
+  }
+}
+
 /**
- * Columns written by this project's own export. They are not user-mappable: they are
- * read by their canonical names when present, so an exported file re-imports intact,
- * and ignored entirely when importing somebody else's CSV.
+ * Columns beyond the mapping. The descriptive ones a person writes by hand are matched
+ * loosely; the rest only this project's export writes, so they are read by their exact
+ * names and somebody else's CSV cannot set them.
  */
-function readEnrichment(row: Record<string, string>): Partial<OwnedGame> {
-  const genres = row['genres']?.split(';').map((g) => g.trim()).filter(Boolean)
+function readEnrichment(row: Record<string, string>, columns: DescriptiveColumns): Partial<OwnedGame> {
+  const cell = (header: string | undefined): string | undefined => (header ? row[header] : undefined)
+  const genres = cell(columns.genres)?.split(';').map((g) => g.trim()).filter(Boolean)
   return {
     ...(genres?.length ? { genres } : {}),
-    releaseYear: number(row['release_year']),
+    releaseYear: number(cell(columns.releaseYear)),
     criticScore: number(row['critic_score']),
     userRating: number(row['user_rating']),
     metacriticUrl: text(row['metacritic_url']),
@@ -153,9 +176,9 @@ function readEnrichment(row: Record<string, string>): Partial<OwnedGame> {
     coverUrl: text(row['cover_url']),
     iconUrl: text(row['icon_url']),
     lastPlayedAt: text(row['last_played_at']),
-    developer: text(row['developer']),
-    publisher: text(row['publisher']),
-    notes: text(row['notes']),
+    developer: text(cell(columns.developer)),
+    publisher: text(cell(columns.publisher)),
+    notes: text(cell(columns.notes)),
     enrichedAt: text(row['enriched_at'])
   }
 }
@@ -166,6 +189,7 @@ export function toOwnedGames(parsed: ParsedCsv, mapping: ColumnMapping): Exporte
   // "not hidden" rather than "this file has nothing to say about hiding".
   const hasHidden = parsed.headers.includes('hidden')
   const hasOverrides = parsed.headers.includes('overrides')
+  const descriptive = descriptiveColumns(parsed.headers)
 
   parsed.rows.forEach((row, index) => {
     const title = mapping.title ? row[mapping.title]?.trim() : ''
@@ -183,7 +207,7 @@ export function toOwnedGames(parsed: ParsedCsv, mapping: ColumnMapping): Exporte
       playStatus: toStatus(mapping.status ? row[mapping.status] : undefined),
       playtimeMinutes: mapping.playtime ? toMinutes(row[mapping.playtime], mapping.playtime) : undefined,
       genres: [],
-      ...readEnrichment(row)
+      ...readEnrichment(row, descriptive)
     }))
   })
 
