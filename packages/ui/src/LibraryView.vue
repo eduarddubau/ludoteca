@@ -10,7 +10,7 @@ import { SORT_OPTIONS, sortEntries, type SortKey } from './lib/sort'
 import LibraryTable from './components/LibraryTable.vue'
 import LibraryGrid from './components/LibraryGrid.vue'
 import FilterMenu from './components/FilterMenu.vue'
-import GameEditor from './components/GameEditor.vue'
+import GameDetails from './components/GameDetails.vue'
 
 const library = useLibrary()
 const emit = defineEmits<{ navigate: [tab: 'settings'] }>()
@@ -177,6 +177,29 @@ async function addGame(game: OwnedGame): Promise<void> {
   closeEditor()
 }
 
+// Opened with showModal, so the details page is on screen however far the grid is scrolled.
+const detailsDialog = ref<HTMLDialogElement | null>(null)
+watch(
+  () => adding.value || editing.value !== null,
+  (open) => {
+    const dialog = detailsDialog.value
+    if (open && dialog && !dialog.open) dialog.showModal()
+    if (!open && dialog?.open) dialog.close()
+  }
+)
+
+// A click on the backdrop lands on the dialog element itself, not on anything inside it.
+function onDialogClick(event: MouseEvent): void {
+  if (event.target === detailsDialog.value) closeEditor()
+}
+
+async function hideEditing(): Promise<void> {
+  const entry = editing.value
+  if (!entry) return
+  await library.setHidden(entry, !showHidden.value)
+  closeEditor()
+}
+
 function closeEditor(): void {
   adding.value = false
   editing.value = null
@@ -249,33 +272,42 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
       </div>
     </div>
 
-    <GameEditor
-      v-if="adding"
-      :entry="null"
-      :sources="[]"
-      :edited-fields="[]"
-      :preview="preview"
-      :fetching="fetching"
-      :fetch-error="fetchError"
-      @add="addGame"
-      @fetch="fetchPreview"
-      @invalidate="invalidatePreview"
-      @close="closeEditor"
-    />
-    <GameEditor
-      v-else-if="editing"
-      :key="editing.key"
-      :entry="editing"
-      :sources="editingSources"
-      :edited-fields="editingEdited"
-      :preview="null"
-      :fetching="false"
-      fetch-error=""
-      @save="saveEdits"
-      @refetch="refetchEditing"
-      @remove="removeEditing"
-      @close="closeEditor"
-    />
+    <dialog
+      ref="detailsDialog"
+      class="details-dialog"
+      @cancel.prevent="closeEditor"
+      @click="onDialogClick"
+    >
+      <GameDetails
+        v-if="adding"
+        :entry="null"
+        :sources="[]"
+        :edited-fields="[]"
+        :preview="preview"
+        :fetching="fetching"
+        :fetch-error="fetchError"
+        @add="addGame"
+        @fetch="fetchPreview"
+        @invalidate="invalidatePreview"
+        @close="closeEditor"
+      />
+      <GameDetails
+        v-else-if="editing"
+        :key="editing.key"
+        :entry="editing"
+        :sources="editingSources"
+        :edited-fields="editingEdited"
+        :preview="null"
+        :fetching="false"
+        fetch-error=""
+        :hidden="showHidden"
+        @save="saveEdits"
+        @refetch="refetchEditing"
+        @remove="removeEditing"
+        @hide="hideEditing"
+        @close="closeEditor"
+      />
+    </dialog>
 
     <div
       v-if="library.games.value.length"
@@ -375,10 +407,7 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
     <LibraryGrid
       v-else-if="view === 'grid'"
       :entries="visible"
-      :needs-fetch="entryNeedsFetch"
-      @enrich="enrichOne"
-      @edit="editing = $event"
-      @hide="library.setHidden($event, !showHidden)"
+      @open="editing = $event"
     />
     <LibraryTable
       v-else
@@ -388,7 +417,7 @@ async function enrichOne(entry: LibraryEntry, searchTitle = entry.title): Promis
       :needs-fetch="entryNeedsFetch"
       @sort="onSort"
       @enrich="enrichOne"
-      @edit="editing = $event"
+      @open="editing = $event"
       @hide="library.setHidden($event, !showHidden)"
     />
   </div>

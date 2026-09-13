@@ -33,8 +33,9 @@ interface Column {
 export const COLUMNS: Column[] = [
   // Two scores, two columns: critics and players sit on different scales, so neither may
   // stand in for the other in one ordering.
-  { key: 'criticScore', label: 'Metacritic', sortable: true },
-  { key: 'steamReviews', label: 'Steam', sortLabel: 'Steam reviews', sortable: true },
+  // Named as Steam's own library sort names them.
+  { key: 'criticScore', label: 'Metacritic score', sortable: true },
+  { key: 'steamReviews', label: 'Steam reviews', sortable: true },
   { key: 'title', label: 'Title', sortLabel: 'Alphabetically', sortable: true },
   { key: 'stores', label: 'Stores', sortable: false },
   { key: 'platforms', label: 'Platform', sortable: false },

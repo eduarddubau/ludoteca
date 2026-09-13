@@ -6,12 +6,8 @@ import ReviewChip from './ReviewChip.vue'
 import ScoreChip from './ScoreChip.vue'
 import StoreLinks from './StoreLinks.vue'
 
-const props = defineProps<{ entry: LibraryEntry; needsFetch: boolean }>()
-const emit = defineEmits<{
-  enrich: [entry: LibraryEntry]
-  edit: [entry: LibraryEntry]
-  hide: [entry: LibraryEntry]
-}>()
+const props = defineProps<{ entry: LibraryEntry }>()
+const emit = defineEmits<{ open: [entry: LibraryEntry] }>()
 
 const metacritic = computed(() => entryMetacriticLink(props.entry))
 const primary = computed(() => storeDestination(props.entry, props.entry.sources[0]))
@@ -38,6 +34,15 @@ const hours = computed(() =>
         <span>{{ entry.title }}</span>
       </div>
 
+      <button
+        class="art-hit"
+        :aria-label="`Details for ${entry.title}`"
+        :title="`Details for ${entry.title}`"
+        @click="emit('open', entry)"
+      >
+        <span class="art-hint">Details</span>
+      </button>
+
       <div class="scrim">
         <StoreLinks :entry="entry" />
         <span
@@ -46,41 +51,21 @@ const hours = computed(() =>
         >{{ hours }}</span>
       </div>
 
-      <ScoreChip
-        class="tile-score"
-        :score="entry.criticScore"
-        :href="metacritic.url"
-        :exact="metacritic.exact"
-        :source="entry.criticScoreSource"
-      />
-      <ReviewChip
-        v-if="entry.steamReviewPercent !== undefined"
-        class="tile-review"
-        :percent="entry.steamReviewPercent"
-        :count="entry.steamReviewCount"
-        :label="entry.steamReviewLabel"
-      />
-
-      <div class="tile-actions">
-        <button
-          v-if="needsFetch"
-          title="Fetch score, art and genres for this game"
-          @click="emit('enrich', entry)"
-        >
-          ↻
-        </button>
-        <button
-          title="Edit this game"
-          @click="emit('edit', entry)"
-        >
-          ✎
-        </button>
-        <button
-          title="Hide or unhide"
-          @click="emit('hide', entry)"
-        >
-          ⊘
-        </button>
+      <div class="tile-scores">
+        <ScoreChip
+          label="Metacritic"
+          :score="entry.criticScore"
+          :href="metacritic.url"
+          :exact="metacritic.exact"
+          :source="entry.criticScoreSource"
+        />
+        <ReviewChip
+          v-if="entry.steamReviewPercent !== undefined"
+          label="Steam"
+          :percent="entry.steamReviewPercent"
+          :count="entry.steamReviewCount"
+          :verdict="entry.steamReviewLabel"
+        />
       </div>
     </div>
 

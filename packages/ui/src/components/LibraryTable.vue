@@ -16,7 +16,7 @@ defineProps<{
 const emit = defineEmits<{
   sort: [key: SortKey]
   enrich: [entry: LibraryEntry]
-  edit: [entry: LibraryEntry]
+  open: [entry: LibraryEntry]
   hide: [entry: LibraryEntry]
 }>()
 
@@ -85,7 +85,7 @@ function cell(entry: LibraryEntry, key: ColumnKey): string {
               v-else-if="column.key === 'steamReviews'"
               :percent="entry.steamReviewPercent"
               :count="entry.steamReviewCount"
-              :label="entry.steamReviewLabel"
+              :verdict="entry.steamReviewLabel"
             />
             <StoreLinks
               v-else-if="column.key === 'stores'"
@@ -106,8 +106,8 @@ function cell(entry: LibraryEntry, key: ColumnKey): string {
             </button>
             <button
               class="row-enrich"
-              title="Edit this game"
-              @click="emit('edit', entry)"
+              title="Details for this game"
+              @click="emit('open', entry)"
             >
               ✎
             </button>

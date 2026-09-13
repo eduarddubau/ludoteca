@@ -200,10 +200,10 @@ shell:
 
 ## The library
 
-Two views over the same data. The **grid** is cover art, score chip, store tags and playtime,
-with per-game actions visible at rest — not revealed on hover, because a control nobody can
-find is not a control, and hover has no equivalent on a touch screen. The **list** carries
-every field there is, all sortable, with missing values sinking to the bottom in both
+Two views over the same data. The **grid** is cover art, the two score chips, store tags and
+playtime; clicking or tapping a cover opens that game's details as a dialog, where its title and
+platform can be edited in place, and which stays on screen however far the grid is scrolled.
+The **list** carries every field there is, all sortable, with missing values sinking to the bottom in both
 directions rather than sorting among the As.
 
 <p align="center">
@@ -213,14 +213,16 @@ directions rather than sorting among the As.
 
 Filtering is faceted: store, platform, shelf, genre, developer, publisher. Categorical fields
 filter and ordinal fields sort — ordering by a studio name tells you nothing you couldn't get
-by selecting one — which leaves four sort terms, few enough to expose as chips instead of
-hiding in a dropdown.
+by selecting one — which leaves five sort terms, few enough to expose as chips instead of
+hiding in a dropdown. The two scores sort separately, named as Steam's own library names
+them: *Metacritic score* and *Steam reviews*.
 
 **Played and Backlog, not three states.** An earlier version had played/unplayed/unknown, but
 all 334 "unknown" rows had no playtime at all, which meant *Epic reports nothing* rather than a
 third state of play. A shelf describes where a game sits, so it can't be wrong.
 
-Games can be added, edited, hidden and deleted by hand. Hiding is how an imported game is
+Games can be added, edited, hidden and deleted by hand — hiding from the details page a cover
+click opens. Hiding is how an imported game is
 removed, since a delete would be undone by the next import; only manually added rows, which
 have no upstream, are truly deleted.
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps<{ percent?: number; count?: number; label?: string }>()
+const props = defineProps<{ percent?: number; count?: number; label?: string; verdict?: string }>()
 
 // Steam's own cut-offs: Mostly Positive starts at 70%, Mixed at 40%.
 const band = computed(() => {
@@ -11,16 +11,20 @@ const band = computed(() => {
 const title = computed(() =>
   props.percent === undefined
     ? 'No Steam review score'
-    : `Steam reviews: ${props.label}, ${props.percent}% of ${props.count?.toLocaleString()} recommend it`
+    : `Steam reviews: ${props.verdict}, ${props.percent}% of ${props.count?.toLocaleString()} recommend it`
 )
 </script>
 
 <template>
   <span
-    class="review"
+    class="rating"
     :class="band"
     :title="title"
   >
-    {{ percent === undefined ? '–' : `${percent}%` }}
+    <span
+      v-if="label"
+      class="rating-label"
+    >{{ label }}</span>
+    <span class="rating-value">{{ percent === undefined ? '–' : `${percent}%` }}</span>
   </span>
 </template>

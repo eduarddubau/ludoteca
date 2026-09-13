@@ -2,12 +2,8 @@
 import type { LibraryEntry } from '@ludoteca/core'
 import GameTile from './GameTile.vue'
 
-defineProps<{ entries: LibraryEntry[]; needsFetch: (entry: LibraryEntry) => boolean }>()
-const emit = defineEmits<{
-  enrich: [entry: LibraryEntry]
-  edit: [entry: LibraryEntry]
-  hide: [entry: LibraryEntry]
-}>()
+defineProps<{ entries: LibraryEntry[] }>()
+const emit = defineEmits<{ open: [entry: LibraryEntry] }>()
 </script>
 
 <template>
@@ -19,10 +15,7 @@ const emit = defineEmits<{
       v-for="entry in entries"
       :key="entry.key"
       :entry="entry"
-      :needs-fetch="needsFetch(entry)"
-      @enrich="emit('enrich', $event)"
-      @edit="emit('edit', $event)"
-      @hide="emit('hide', $event)"
+      @open="emit('open', $event)"
     />
   </div>
   <p

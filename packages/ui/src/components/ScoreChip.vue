@@ -7,6 +7,8 @@ const props = defineProps<{
   href: string
   exact: boolean
   source?: 'steam' | 'pcgamingwiki'
+  /** Shown before the score where nothing else names it, as on a tile. */
+  label?: string
 }>()
 const band = computed(() => (props.score === undefined ? 'none' : scoreBand(props.score)))
 const title = computed(() => {
@@ -17,13 +19,17 @@ const title = computed(() => {
 
 <template>
   <a
-    class="score"
+    class="rating"
     :class="band"
     :href="href"
     target="_blank"
     rel="noreferrer"
     :title="title"
   >
-    {{ score ?? '–' }}
+    <span
+      v-if="label"
+      class="rating-label"
+    >{{ label }}</span>
+    <span class="rating-value">{{ score ?? '–' }}</span>
   </a>
 </template>
