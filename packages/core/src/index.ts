@@ -29,6 +29,7 @@ export {
 } from './links.js'
 export {
   enrichGame, enrichLibrary, enrichWithAppId, searchCandidates, shortenTitle, needsEnrichment,
+  isEditionOf,
   EnrichTransientError,
   type EnrichProgress, type EnrichOptions, type MatchCandidate
 } from './enrich/steam.js'

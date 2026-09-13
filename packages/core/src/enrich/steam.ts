@@ -33,7 +33,8 @@ interface SearchHit {
 export interface MatchCandidate {
   appId: number
   name: string
-  coverUrl: string
+  /** Absent when Steam has no portrait art for the item, as with most DLC. */
+  coverUrl?: string
   /** True when the name matches exactly — what auto-matching would have accepted. */
   exact: boolean
 }
@@ -92,9 +93,19 @@ async function json<T>(platform: Platform, url: string): Promise<T | null> {
   throw new EnrichTransientError(url, `Steam kept failing (${lastProblem}) after ${RETRY_DELAYS_MS.length + 1} attempts.`)
 }
 
-// Editions Steam ships under a longer name than the game is commonly called.
+// Editions Steam ships under a longer name than the game is commonly called. Anchored at
+// both ends, so the whole remainder has to be edition words: anchored only at the end, it
+// took "Death Stranding 2: On the Beach - Upgrade to Digital Deluxe Edition" for Death
+// Stranding and "Hitman Classic Trilogy Remastered" for HITMAN.
 const EDITION_SUFFIX =
-  /(ultimate|definitive|complete|deluxe|enhanced|goty|game of the year|remastered|anniversary|standard)\s*(edition)?$/
+  /^[-–—:]?\s*(the\s+)?(ultimate|definitive|complete|deluxe|enhanced|goty|game of the year|remastered|anniversary|standard)\s*(edition)?$/
+
+/** The same game sold under an edition name, such as "DARQ: Complete Edition" for DARQ. */
+export function isEditionOf(title: string, name: string): boolean {
+  const lower = name.toLowerCase()
+  const wanted = title.toLowerCase()
+  return lower.startsWith(wanted) && EDITION_SUFFIX.test(lower.slice(wanted.length).trim())
+}
 
 /**
  * Searches Steam and returns a hit only when the name genuinely corresponds.
@@ -138,12 +149,7 @@ async function findAppId(platform: Platform, title: string): Promise<SearchHit |
 
   // Second tier: the same game under an edition name. Anything else is left unmatched
   // for a human to resolve rather than guessed at.
-  return (
-    items.find((item) => {
-      const name = item.name.toLowerCase()
-      return name.startsWith(title.toLowerCase()) && EDITION_SUFFIX.test(name.slice(title.length).trim())
-    }) ?? null
-  )
+  return items.find((item) => isEditionOf(title, item.name)) ?? null
 }
 
 interface AppDetails {
@@ -163,6 +169,38 @@ async function fetchDetails(platform: Platform, appId: number): Promise<AppDetai
   const result = await json<Record<string, AppDetails>>(platform, url)
   const entry = result?.[String(appId)]
   return entry?.success ? (entry.data ?? null) : null
+}
+
+interface StoreItem {
+  appid: number
+  assets?: { asset_url_format?: string; library_capsule?: string }
+}
+
+const ASSET_HOST = 'https://shared.akamai.steamstatic.com/store_item_assets/'
+
+/**
+ * Portrait covers keyed by app, at the paths Steam actually serves. Newer apps keep their
+ * art under a hashed directory, so a URL built from the app id alone 404s — and a stored
+ * dead link counts as a resolved cover, so nothing flagged the ten that had one.
+ */
+async function fetchCovers(platform: Platform, appIds: number[]): Promise<Map<number, string>> {
+  const covers = new Map<number, string>()
+  if (!appIds.length) return covers
+
+  const input = {
+    ids: appIds.map((appid) => ({ appid })),
+    context: { language: 'english', country_code: 'US' },
+    data_request: { include_assets: true }
+  }
+  const url = `https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json=${encodeURIComponent(JSON.stringify(input))}`
+  const result = await json<{ response?: { store_items?: StoreItem[] } }>(platform, url)
+
+  for (const item of result?.response?.store_items ?? []) {
+    const format = item.assets?.asset_url_format
+    const capsule = item.assets?.library_capsule
+    if (format && capsule) covers.set(item.appid, ASSET_HOST + format.replace('${FILENAME}', capsule))
+  }
+  return covers
 }
 
 function releaseYear(raw: string | undefined): number | undefined {
@@ -188,11 +226,13 @@ export async function searchCandidates(
   const url = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(title)}&cc=us&l=en`
   const result = await json<{ items?: SearchHit[] }>(platform, url)
   const wanted = normalize(title)
+  const items = (result?.items ?? []).slice(0, limit)
+  const covers = await fetchCovers(platform, items.map((item) => item.id))
 
-  return (result?.items ?? []).slice(0, limit).map((item) => ({
+  return items.map((item) => ({
     appId: item.id,
     name: item.name,
-    coverUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.id}/library_600x900.jpg`,
+    coverUrl: covers.get(item.id),
     exact: normalize(item.name) === wanted
   }))
 }
@@ -204,11 +244,13 @@ export async function enrichWithAppId(
   appId: number
 ): Promise<OwnedGame> {
   const details = await fetchDetails(platform, appId)
+  const covers = await fetchCovers(platform, [appId])
   return {
     ...game,
     criticScore: details?.metacritic?.score ?? game.criticScore,
     metacriticUrl: details?.metacritic?.url ?? game.metacriticUrl,
-    coverUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`,
+    // No fallback to the stored cover: that is how a dead link would survive a refetch.
+    coverUrl: covers.get(appId),
     genres: details?.genres?.map((g) => g.description) ?? game.genres,
     developer: details?.developers?.[0] ?? game.developer,
     publisher: details?.publishers?.[0] ?? game.publisher,

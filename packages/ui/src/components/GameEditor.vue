@@ -54,7 +54,8 @@ const changes = computed<Partial<Record<EditableField, unknown>>>(() => {
   return next
 })
 
-const matched = computed(() => props.preview?.coverUrl !== undefined)
+// Only a match sets a store link; a matched item can still lack cover art.
+const matched = computed(() => props.preview?.storeUrl !== undefined)
 
 const facts = computed(() => {
   const game = props.preview ?? props.entry

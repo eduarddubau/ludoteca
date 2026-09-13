@@ -59,7 +59,8 @@ onMounted(search)
         class="candidate"
         @click="emit('pick', candidate.appId)"
       >
-        <img :src="candidate.coverUrl" :alt="candidate.name" loading="lazy" />
+        <img v-if="candidate.coverUrl" :src="candidate.coverUrl" :alt="candidate.name" loading="lazy" />
+        <span v-else class="candidate-noart muted">No cover art</span>
         <span class="candidate-name">{{ candidate.name }}</span>
         <span v-if="candidate.exact" class="candidate-exact">exact</span>
       </button>
