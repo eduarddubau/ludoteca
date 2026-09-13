@@ -1,12 +1,7 @@
-import { PLATFORM_IDS, STORE_IDS } from '../connectors/types.js'
 import { sanitizeOverrides } from '../library/userdata.js'
 import { withSteamAppId } from '../enrich/shared.js'
 import type { ExportedGame } from '../export/csv.js'
-import type { GamePlatform, PlayStatus, StoreId } from '../connectors/types.js'
-
-const STORES: StoreId[] = STORE_IDS
-const STATUSES: PlayStatus[] = ['played', 'unplayed', 'unknown']
-const PLATFORMS = PLATFORM_IDS
+import { toPlatform, toStatus, toStore } from './values.js'
 
 const str = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim() ? value.trim() : undefined
@@ -41,9 +36,6 @@ export function fromJson(text: string): ExportedGame[] {
     const title = str(entry['title'])
     if (!title) continue
 
-    const store = str(entry['store'])?.toLowerCase()
-    const status = str(entry['playStatus'])?.toLowerCase()
-    const platform = str(entry['platform'])?.toLowerCase()
     const ownership = entry['ownership'] as
       | { kind?: unknown; ownerAccountId?: unknown; excludeReason?: unknown }
       | undefined
@@ -52,7 +44,7 @@ export function fromJson(text: string): ExportedGame[] {
       : []
 
     games.push(withSteamAppId({
-      store: STORES.includes(store as StoreId) ? (store as StoreId) : 'other',
+      store: toStore(str(entry['store'])),
       storeGameId: str(entry['storeGameId']) ?? `json-${index}`,
       title,
       ownership:
@@ -65,10 +57,8 @@ export function fromJson(text: string): ExportedGame[] {
                 : {})
             }
           : { kind: 'owned' },
-      platform: PLATFORMS.includes(platform as GamePlatform)
-        ? (platform as GamePlatform)
-        : 'pc',
-      playStatus: STATUSES.includes(status as PlayStatus) ? (status as PlayStatus) : 'unknown',
+      platform: toPlatform(str(entry['platform'])),
+      playStatus: toStatus(str(entry['playStatus'])),
       playtimeMinutes: num(entry['playtimeMinutes']),
       genres,
       releaseYear: num(entry['releaseYear']),

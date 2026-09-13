@@ -2,9 +2,9 @@ import Papa from 'papaparse'
 import { withSteamAppId } from '../enrich/shared.js'
 import { sanitizeOverrides } from '../library/userdata.js'
 import type { ExportedGame } from '../export/csv.js'
-import { STORE_IDS } from '../connectors/types.js'
-import type { GamePlatform, Ownership, OwnedGame, PlayStatus, StoreId } from '../connectors/types.js'
+import type { Ownership, OwnedGame } from '../connectors/types.js'
 import type { EditableField } from '../library/userdata.js'
+import { KNOWN_STORES, normalize, toPlatform, toStatus, toStore } from './values.js'
 
 export interface ParsedCsv {
   headers: string[]
@@ -45,8 +45,6 @@ const ALIASES: Record<keyof ColumnMapping, string[]> = {
   storeGameId: ['appid', 'id', 'gameid', 'storegameid', 'productid']
 }
 
-const normalize = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-
 /** Most of a column's values naming known stores is what makes it a store column. */
 function holdsStoreNames(rows: Record<string, string>[], header: string): boolean {
   const values = rows.slice(0, 50).map((row) => normalize(row[header] ?? '')).filter(Boolean)
@@ -83,32 +81,6 @@ export function suggestMapping(parsed: ParsedCsv): ColumnMapping {
   return mapping
 }
 
-const KNOWN_STORES: StoreId[] = STORE_IDS
-
-const PLATFORM_ALIASES: [GamePlatform, string[]][] = [
-  ['playstation', ['playstation', 'psn', 'ps5', 'ps4', 'ps3', 'ps2']],
-  ['switch', ['nintendoswitch', 'nintendo', 'switch']],
-  ['xbox', ['xboxseries', 'xboxone', 'xbox360', 'xbox', 'gamepass']],
-  ['pc', ['steamdeck', 'windows', 'linux', 'macos', 'desktop', 'mac', 'pc']]
-]
-
-/**
- * Matched by substring so real column values land — "PlayStation 5", "Xbox Series X",
- * "Nintendo Switch OLED". Unmapped or blank means PC; anything unplaceable is 'other'
- * rather than a guess.
- */
-function toPlatform(raw: string | undefined): GamePlatform {
-  const value = normalize(raw ?? '')
-  if (!value) return 'pc'
-  const hit = PLATFORM_ALIASES.find(([, aliases]) => aliases.some((a) => value.includes(a)))
-  return hit ? hit[0] : 'other'
-}
-
-function toStore(raw: string | undefined): StoreId {
-  const value = normalize(raw ?? '')
-  return KNOWN_STORES.find((s) => value.includes(s)) ?? 'other'
-}
-
 /** A malformed cell must not fail the whole import; the row is still worth having. */
 function readOverrides(raw: string | undefined): Partial<Record<EditableField, unknown>> {
   if (!raw?.trim()) return {}
@@ -131,13 +103,6 @@ function toOwnership(row: Record<string, string>): Ownership {
     ownerAccountId: text(row['owner_account_id']) ?? '',
     ...(excludeReason !== undefined ? { excludeReason } : {})
   }
-}
-
-function toStatus(raw: string | undefined): PlayStatus {
-  const value = normalize(raw ?? '')
-  if (value.includes('unplayed') || value.includes('never')) return 'unplayed'
-  if (value.includes('played') || value.includes('complete') || value.includes('finish')) return 'played'
-  return 'unknown'
 }
 
 // Column headers disagree on units. Anything not explicitly minutes is read as hours,
