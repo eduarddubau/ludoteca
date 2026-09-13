@@ -1,5 +1,5 @@
 // Bump when SCHEMA changes so a shell opening an older file can tell.
-export const SCHEMA_VERSION = 8
+export const SCHEMA_VERSION = 9
 
 // One row per game per store. The same title arriving from two stores stays two rows;
 // merging is a presentation concern, and a wrong merge is worse than a duplicate.
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS game (
   steam_review_count   INTEGER,
   steam_review_label   TEXT,
   store_url        TEXT,
+  steam_app_id     INTEGER,
   user_rating      INTEGER,
   last_played_at   TEXT,
   icon_url         TEXT,
@@ -73,4 +74,18 @@ export const TABLES = ['game', 'user_data', 'sync_state'] as const
  * insert failed against an existing database with an error naming only the first missing
  * column.
  */
-export const MIGRATIONS: { version: number; sql: string }[] = []
+export const MIGRATIONS: { version: number; sql: string }[] = [
+  {
+    // Enrichment used to write the matched Steam page into store_url for every game, so an
+    // Epic game's store link opened Steam. The app id moves to its own column — the Steam
+    // page is rebuilt from it, so clearing the URL on other stores' rows loses nothing.
+    version: 9,
+    sql: `
+      UPDATE game SET steam_app_id = CAST(substr(store_url, 36) AS INTEGER)
+        WHERE steam_app_id IS NULL AND store_url LIKE 'https://store.steampowered.com/app/%';
+      UPDATE game SET store_url = NULL
+        WHERE store <> 'steam' AND steam_app_id IS NOT NULL
+          AND store_url LIKE 'https://store.steampowered.com/%';
+    `
+  }
+]

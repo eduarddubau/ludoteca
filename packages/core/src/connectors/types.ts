@@ -61,7 +61,11 @@ export interface OwnedGame {
   steamReviewCount?: number
   /** Steam's own wording, such as "Very Positive". */
   steamReviewLabel?: string
+  /** The game's page on the store it is owned on. */
   storeUrl?: string
+  /** The Steam app enrichment matched, whichever store the game is owned on — what review
+   *  scores, PCGamingWiki and the Steam page link key on. */
+  steamAppId?: number
   userRating?: number
   lastPlayedAt?: string
   iconUrl?: string

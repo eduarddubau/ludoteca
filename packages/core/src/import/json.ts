@@ -1,5 +1,6 @@
 import { PLATFORM_IDS, STORE_IDS } from '../connectors/types.js'
 import { sanitizeOverrides } from '../library/userdata.js'
+import { withSteamAppId } from '../enrich/shared.js'
 import type { ExportedGame } from '../export/csv.js'
 import type { GamePlatform, PlayStatus, StoreId } from '../connectors/types.js'
 
@@ -50,7 +51,7 @@ export function fromJson(text: string): ExportedGame[] {
       ? (entry['genres'] as unknown[]).map(str).filter((g): g is string => g !== undefined)
       : []
 
-    games.push({
+    games.push(withSteamAppId({
       store: STORES.includes(store as StoreId) ? (store as StoreId) : 'other',
       storeGameId: str(entry['storeGameId']) ?? `json-${index}`,
       title,
@@ -83,6 +84,7 @@ export function fromJson(text: string): ExportedGame[] {
       steamReviewCount: num(entry['steamReviewCount']),
       steamReviewLabel: str(entry['steamReviewLabel']),
       storeUrl: str(entry['storeUrl']),
+      steamAppId: num(entry['steamAppId']),
       userRating: num(entry['userRating']),
       lastPlayedAt: str(entry['lastPlayedAt']),
       coverUrl: str(entry['coverUrl']),
@@ -92,7 +94,7 @@ export function fromJson(text: string): ExportedGame[] {
       addedManually: entry['addedManually'] === true,
       ...('hidden' in entry ? { hidden: entry['hidden'] === true } : {}),
       ...('overrides' in entry ? { overrides: sanitizeOverrides(entry['overrides']) } : {})
-    })
+    }))
   }
 
   if (!games.length) throw new Error('No entries with a title were found in that file.')

@@ -60,6 +60,7 @@ export interface LibraryEntry {
   criticScore?: number
   metacriticUrl?: string
   criticScoreSource?: 'steam' | 'pcgamingwiki'
+  steamAppId?: number
   steamReviewPercent?: number
   steamReviewCount?: number
   steamReviewLabel?: string
@@ -139,6 +140,7 @@ export function mergeLibrary(games: OwnedGame[]): LibraryEntry[] {
       publisher: first((game) => game.publisher),
       criticScore: scored?.criticScore,
       criticScoreSource: scored?.criticScoreSource,
+      steamAppId: first((game) => game.steamAppId),
       metacriticUrl: first((game) => game.metacriticUrl),
       steamReviewPercent: reviewed?.steamReviewPercent,
       steamReviewCount: reviewed?.steamReviewCount,

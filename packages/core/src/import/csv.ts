@@ -1,4 +1,5 @@
 import Papa from 'papaparse'
+import { withSteamAppId } from '../enrich/shared.js'
 import { sanitizeOverrides } from '../library/userdata.js'
 import type { ExportedGame } from '../export/csv.js'
 import { STORE_IDS } from '../connectors/types.js'
@@ -181,6 +182,7 @@ function readEnrichment(row: Record<string, string>): Partial<OwnedGame> {
     steamReviewCount: number(row['steam_review_count']),
     steamReviewLabel: text(row['steam_review_label']),
     storeUrl: text(row['store_url']),
+    steamAppId: number(row['steam_app_id']),
     coverUrl: text(row['cover_url']),
     iconUrl: text(row['icon_url']),
     lastPlayedAt: text(row['last_played_at']),
@@ -202,7 +204,7 @@ export function toOwnedGames(parsed: ParsedCsv, mapping: ColumnMapping): Exporte
     const title = mapping.title ? row[mapping.title]?.trim() : ''
     if (!title) return
 
-    games.push({
+    games.push(withSteamAppId({
       store: toStore(mapping.store ? row[mapping.store] : undefined),
       storeGameId: (mapping.storeGameId ? row[mapping.storeGameId]?.trim() : '') || `csv-${index}`,
       title,
@@ -215,7 +217,7 @@ export function toOwnedGames(parsed: ParsedCsv, mapping: ColumnMapping): Exporte
       playtimeMinutes: mapping.playtime ? toMinutes(row[mapping.playtime], mapping.playtime) : undefined,
       genres: [],
       ...readEnrichment(row)
-    })
+    }))
   })
 
   return games

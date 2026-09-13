@@ -1,27 +1,29 @@
 <script setup lang="ts">
-import { FACET_LABEL, sourceLink, type GameSource, type LibraryEntry } from '@ludoteca/core'
+import { computed } from 'vue'
+import type { LibraryEntry } from '@ludoteca/core'
+import { sourceLabel, storeDestination } from '../lib/links'
 
-// A game owned and also family-shared has two Steam sources; label them apart.
-const label = (source: GameSource): string =>
-  FACET_LABEL[source.store === 'steam' && source.shared ? 'steam:shared' : source.store]
+const props = defineProps<{ entry: LibraryEntry }>()
 
-defineProps<{ entry: LibraryEntry }>()
+const tags = computed(() =>
+  props.entry.sources.map((source) => ({
+    key: `${source.store}:${source.storeGameId}`,
+    label: sourceLabel(source),
+    ...storeDestination(props.entry, source)
+  }))
+)
 </script>
 
 <template>
   <span class="store-links">
     <a
-      v-for="source in entry.sources"
-      :key="`${source.store}:${source.storeGameId}`"
-      :href="sourceLink(source, entry.title).url"
+      v-for="tag in tags"
+      :key="tag.key"
+      :href="tag.url"
       target="_blank"
       rel="noreferrer"
-      :class="['store-link', { approx: !sourceLink(source, entry.title).exact }]"
-      :title="
-        sourceLink(source, entry.title).exact
-          ? `Open on ${label(source)}`
-          : `Search ${label(source)} (no exact match yet)`
-      "
-    >{{ label(source) }}</a>
+      :class="['store-link', { approx: tag.approx }]"
+      :title="tag.title"
+    >{{ tag.label }}</a>
   </span>
 </template>

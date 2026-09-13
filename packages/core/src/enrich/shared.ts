@@ -67,7 +67,24 @@ export async function fetchJson<T>(
 
 /** The Steam app a game is known by: the one a match stored, or its own id on Steam. */
 export function steamAppId(game: OwnedGame): number | undefined {
+  if (game.steamAppId !== undefined) return game.steamAppId
+  // Rows written before steam_app_id existed carry the match only as a Steam storeUrl.
   const matched = game.storeUrl?.match(/store\.steampowered\.com\/app\/(\d+)/)
   if (matched) return Number(matched[1])
   return game.store === 'steam' && /^\d+$/.test(game.storeGameId) ? Number(game.storeGameId) : undefined
+}
+
+/**
+ * Splits a matched Steam page out of storeUrl, for rows from a backup written before the two
+ * were separate. On a game owned elsewhere the Steam URL was never its store page.
+ */
+export function withSteamAppId<T extends OwnedGame>(game: T): T {
+  const id = steamAppId(game)
+  if (id === undefined) return game
+  const steamUrl = /^https:\/\/store\.steampowered\.com\//.test(game.storeUrl ?? '')
+  return {
+    ...game,
+    steamAppId: id,
+    ...(game.store !== 'steam' && steamUrl ? { storeUrl: undefined } : {})
+  }
 }

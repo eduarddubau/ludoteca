@@ -24,7 +24,8 @@ export {
 } from './import/csv.js'
 export { sampleLibrary } from './import/sample.js'
 export {
-  storeLink, metacriticLink, sourceLink, entryMetacriticLink, scoreBand,
+  storeLink, metacriticLink, sourceLink, entryMetacriticLink, scoreBand, steamPage,
+  pcgamingwikiPage,
   type GameLink
 } from './links.js'
 export {
@@ -32,7 +33,7 @@ export {
   isEditionOf, refreshSteamReviews,
   type EnrichProgress, type EnrichOptions, type MatchCandidate
 } from './enrich/steam.js'
-export { EnrichTransientError, steamAppId } from './enrich/shared.js'
+export { EnrichTransientError, steamAppId, withSteamAppId } from './enrich/shared.js'
 export {
   fillMetacriticFromPcgamingwiki, metacriticFromWikitext, type MetacriticReception
 } from './enrich/pcgamingwiki.js'

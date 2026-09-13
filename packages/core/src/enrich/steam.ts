@@ -275,7 +275,13 @@ export async function enrichWithAppId(
     developer: details?.developers?.[0] ?? game.developer,
     publisher: details?.publishers?.[0] ?? game.publisher,
     releaseYear: releaseYear(details?.release_date?.date) ?? game.releaseYear,
-    storeUrl: `https://store.steampowered.com/app/${appId}`,
+    steamAppId: appId,
+    // Steam's page is the store page only for a Steam game; an imported one, with no app of its
+    // own, takes the match. Any other store's page, like a synced GOG one, is left alone.
+    storeUrl:
+      game.store === 'steam' && !/^\d+$/.test(game.storeGameId)
+        ? `https://store.steampowered.com/app/${appId}`
+        : game.storeUrl,
     enrichedAt: new Date().toISOString()
   }
 }

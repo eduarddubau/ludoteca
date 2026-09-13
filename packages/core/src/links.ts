@@ -12,6 +12,31 @@ const SEARCH: Record<StoreId, (title: string) => string> = {
   other: (t) => `https://duckduckgo.com/?q=${encodeURIComponent(`${t} game`)}`
 }
 
+// A stored URL counts as a store's own page only on that store's site, so no label can
+// point somewhere else — as an Epic tag opening Steam once did.
+const OWN_SITE: Partial<Record<StoreId, RegExp>> = {
+  steam: /(^|\.)steampowered\.com$/,
+  gog: /(^|\.)gog\.com$/,
+  epic: /(^|\.)epicgames\.com$/
+}
+
+function ownPage(store: StoreId, url: string | undefined): string | undefined {
+  if (!url) return undefined
+  const site = OWN_SITE[store]
+  if (!site) return url
+  try {
+    return site.test(new URL(url).hostname) ? url : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export const steamPage = (appId: number): string => `https://store.steampowered.com/app/${appId}`
+
+/** PCGamingWiki's own redirect from a Steam app id to the game's page. */
+export const pcgamingwikiPage = (appId: number): string =>
+  `https://www.pcgamingwiki.com/api/appid.php?appid=${appId}`
+
 export interface GameLink {
   url: string
   /** False when this is a search fallback rather than the game's own page. */
@@ -19,7 +44,8 @@ export interface GameLink {
 }
 
 export function storeLink(game: OwnedGame): GameLink {
-  if (game.storeUrl) return { url: game.storeUrl, exact: true }
+  const own = ownPage(game.store, game.storeUrl)
+  if (own) return { url: own, exact: true }
 
   // Steam is the one store whose page URL is derivable from the id alone.
   if (game.store === 'steam' && /^\d+$/.test(game.storeGameId)) {
@@ -31,7 +57,8 @@ export function storeLink(game: OwnedGame): GameLink {
 
 /** One link per store an entry is owned on. */
 export function sourceLink(source: GameSource, title: string): GameLink {
-  if (source.storeUrl) return { url: source.storeUrl, exact: true }
+  const own = ownPage(source.store, source.storeUrl)
+  if (own) return { url: own, exact: true }
   if (source.store === 'steam' && /^\d+$/.test(source.storeGameId)) {
     return { url: `https://store.steampowered.com/app/${source.storeGameId}`, exact: true }
   }

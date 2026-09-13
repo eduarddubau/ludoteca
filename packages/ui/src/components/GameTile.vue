@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { entryMetacriticLink, SHELF_LABEL, sourceLink, type LibraryEntry } from '@ludoteca/core'
+import { entryMetacriticLink, SHELF_LABEL, type LibraryEntry } from '@ludoteca/core'
+import { storeDestination } from '../lib/links'
 import ReviewChip from './ReviewChip.vue'
 import ScoreChip from './ScoreChip.vue'
 import StoreLinks from './StoreLinks.vue'
@@ -13,7 +14,7 @@ const emit = defineEmits<{
 }>()
 
 const metacritic = computed(() => entryMetacriticLink(props.entry))
-const primary = computed(() => sourceLink(props.entry.sources[0], props.entry.title))
+const primary = computed(() => storeDestination(props.entry, props.entry.sources[0]))
 const hours = computed(() =>
   props.entry.playtimeMinutes === undefined
     ? null
@@ -89,7 +90,7 @@ const hours = computed(() =>
         target="_blank"
         rel="noreferrer"
         class="title"
-        :title="entry.title"
+        :title="`${entry.title} · ${primary.title}`"
       >
         {{ entry.title }}
       </a>
